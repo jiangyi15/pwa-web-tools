@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Clebsch-Gordan Coefficient Calculator - Compute quantum angular momentum coupling coefficients with exact symbolic computation.">
+  <title>Clebsch-Gordan Calculator | Partial Wave Analysis Tools</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+  <style>
+    /* Additional styles for calculator page */
+    .input-section {
+      margin-bottom: 1rem;
+    }
+
+    .input-section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* Compact 3x2 grid for all quantum number inputs */
+    .qn-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .qn-grid .form-group {
+      margin-bottom: 0;
+      min-width: 0;
+    }
+
+    .qn-grid .form-label {
+      margin-bottom: 0.3rem;
+      text-align: center;
+    }
+
+    /* Stepper: [-] [input] [+] */
+    .stepper {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .stepper:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .stepper-btn {
+      flex: 0 0 auto;
+      width: 2rem;
+      border: none;
+      background: var(--bg-tertiary, var(--bg-secondary));
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      user-select: none;
+      transition: background var(--transition-fast), color var(--transition-fast);
+    }
+
+    .stepper-btn:hover {
+      background: var(--accent-glow, rgba(6,182,212,0.15));
+      color: var(--accent, var(--text-primary));
+    }
+
+    .stepper-btn:active {
+      transform: translateY(1px);
+    }
+
+    .stepper .form-input {
+      flex: 1 1 auto;
+      width: auto;
+      max-width: none;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      padding: 0.5rem 0.25rem;
+      min-width: 0;
+    }
+
+    .stepper .form-input:focus {
+      outline: none;
+      box-shadow: none;
+    }
+
+    .stepper .form-input[readonly] {
+      color: var(--accent, var(--text-primary));
+      cursor: not-allowed;
+      background: transparent;
+    }
+
+    @media (max-width: 480px) {
+      .qn-grid {
+        gap: 0.4rem;
+      }
+      .stepper-btn {
+        width: 1.5rem;
+        font-size: 1rem;
+      }
+      .stepper .form-input {
+        padding: 0.4rem 0.15rem;
+        font-size: 0.85rem;
+      }
+    }
+    
+    .copiable {
+      cursor: pointer;
+      position: relative;
+    }
+    
+    .copiable:hover::after {
+      content: 'Click to copy';
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.625rem;
+      color: var(--text-muted);
+      background: var(--bg-tertiary);
+      padding: 0.25rem 0.5rem;
+      border-radius: 3px;
+    }
+    
+    .symbolic-result {
+      font-family: var(--font-sans);
+      background: var(--bg-secondary);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      word-break: break-all;
+    }
+
+    /* Rendered LaTeX output */
+    .latex-render {
+      background: var(--bg-secondary);
+      padding: 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      text-align: center;
+      color: var(--text-primary);
+      font-size: 1.1rem;
+      min-height: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .latex-render .katex {
+      color: var(--accent, var(--text-primary));
+      font-size: 1.25em;
+    }
+
+    /* Inline LaTeX inside the "Input = result" line */
+    .latex-inline .katex {
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="../index.html" class="back-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back to Tools
+        </a>
+        <a href="../index.html" class="logo">
+          <div class="logo-icon">⚛</div>
+          <span>Partial Wave Analysis Tools</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Calculator Page -->
+  <main class="calc-page">
+    <div class="container">
+      <!-- Page Header -->
+      <div class="calc-header">
+        <h1 class="calc-title">Clebsch-Gordan Coefficient Calculator</h1>
+        <p class="calc-subtitle">
+          Calculate ⟨j₁ m₁ j₂ m₂ | J M⟩ coupling coefficients with exact symbolic computation
+        </p>
+      </div>
+
+      <!-- Main Grid -->
+      <div class="calc-grid">
+        <!-- Left Column: Input & Results -->
+        <div>
+          <!-- Input Card -->
+          <div class="calc-card">
+            <div class="calc-card-header">
+              <span class="calc-card-icon">🔢</span>
+              <h3 class="calc-card-title">Quantum Numbers</h3>
+            </div>
+            <div class="calc-card-body">
+              <form id="cg-form">
+                <div class="input-section">
+                  <div class="input-section-title">⟨ j₁ m₁ ; j₂ m₂ | J M ⟩</div>
+                  <div class="qn-grid">
+                    <div class="form-group">
+                      <label class="form-label" for="j1">j₁</label>
+                      <div class="stepper" data-target="j1">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease j₁">−</button>
+                        <input type="text" id="j1" class="form-input" placeholder="1/2" value="1/2" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase j₁">+</button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="j2">j₂</label>
+                      <div class="stepper" data-target="j2">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease j₂">−</button>
+                        <input type="text" id="j2" class="form-input" placeholder="1/2" value="1/2" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase j₂">+</button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="J">J</label>
+                      <div class="stepper" data-target="J">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease J">−</button>
+                        <input type="text" id="J" class="form-input" placeholder="1" value="1" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase J">+</button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="m1">m₁</label>
+                      <div class="stepper" data-target="m1">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease m₁">−</button>
+                        <input type="text" id="m1" class="form-input" placeholder="1/2" value="1/2" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase m₁">+</button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="m2">m₂</label>
+                      <div class="stepper" data-target="m2">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease m₂">−</button>
+                        <input type="text" id="m2" class="form-input" placeholder="-1/2" value="-1/2" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase m₂">+</button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="M">M <span style="opacity:0.6;font-size:0.7em">(auto)</span></label>
+                      <div class="stepper" data-target="M">
+                        <input type="text" id="M" class="form-input" placeholder="0" value="0" readonly aria-readonly="true" tabindex="-1" required>
+                      </div>
+                    </div>
+                  </div>
+                  <p class="form-hint" style="margin-top:0.25rem">
+                    Accepts integers, half-integers (e.g. <code>3/2</code>), or decimals.
+                    Rules: <code>j ≥ 0</code>, <code>|m| ≤ j</code>, <code>m₁+m₂ = M</code>, <code>|j₁−j₂| ≤ J ≤ j₁+j₂</code>.
+                  </p>
+                </div>
+
+                <div class="btn-group">
+                  <button type="submit" class="btn btn-primary" id="calculate-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M12 6v6l4 2"></path>
+                    </svg>
+                    Calculate
+                  </button>
+                  <button type="button" class="btn btn-secondary" id="clear-btn">
+                    Clear
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Examples Section -->
+          <div class="examples-section">
+            <h4 class="examples-title">Try Examples:</h4>
+            <div class="examples-grid">
+              <button type="button" class="example-btn" data-example='{"j1":"1/2","m1":"1/2","j2":"1/2","m2":"-1/2","J":"1","M":"0"}'>
+                ⟨½ ½ ½ −½ | 1 0⟩
+              </button>
+              <button type="button" class="example-btn" data-example='{"j1":"1","m1":"0","j2":"1","m2":"0","J":"2","M":"0"}'>
+                ⟨1 0 1 0 | 2 0⟩
+              </button>
+              <button type="button" class="example-btn" data-example='{"j1":"1","m1":"1","j2":"1","m2":"-1","J":"0","M":"0"}'>
+                ⟨1 1 1 −1 | 0 0⟩
+              </button>
+              <button type="button" class="example-btn" data-example='{"j1":"3/2","m1":"1/2","j2":"1/2","m2":"1/2","J":"2","M":"1"}'>
+                ⟨³⁄₂ ½ ½ ½ | 2 1⟩
+              </button>
+              <button type="button" class="example-btn" data-example='{"j1":"2","m1":"1","j2":"1","m2":"0","J":"3","M":"1"}'>
+                ⟨2 1 1 0 | 3 1⟩
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Results & Formula -->
+        <div>
+          <!-- Results Panel -->
+          <div class="results-panel" id="results-panel">
+            <div class="results-header">
+              <div class="results-status">
+                <span class="status-indicator" id="status-indicator"></span>
+                <span id="status-text">Enter quantum numbers and click Calculate</span>
+              </div>
+            </div>
+            <div class="results-body" id="results-body">
+              <p style="color: var(--text-muted); font-size: 0.875rem;">
+                Results will appear here after calculation.
+              </p>
+            </div>
+          </div>
+
+          <!-- Formula Card -->
+          <div class="formula-section">
+            <div class="formula-card">
+              <h4 class="formula-title">Racah Formula</h4>
+              <div class="formula-content">⟨j₁ m₁ j₂ m₂ | J M⟩ = δ(m₁+m₂, M) · √( (2J+1) · Δ(j₁,j₂,J) ) ·
+  √( (j₁+m₁)!(j₁−m₁)!(j₂+m₂)!(j₂−m₂)!(J+M)!(J−M)! ) ·
+  Σₖ (−1)ᵏ / [ k! (j₁+j₂−J−k)! (j₁−m₁−k)! (j₂+m₂−k)! (J−j₂+m₁+k)! (J−j₁−m₂+k)! ]
+
+where Δ(a,b,c) = (a+b−c)!(a−b+c)!(−a+b+c)! / (a+b+c+1)!
+
+Sum over k runs where all factorial arguments are ≥ 0.</div>
+              <p class="formula-note">
+                Symbolic computation powered by <a href="http://algebrite.org/" target="_blank" rel="noopener" style="color: var(--accent);">Algebrite</a> — 
+                a pure JavaScript computer algebra system.
+              </p>
+            </div>
+          </div>
+
+          <!-- Selection Rules -->
+          <div class="formula-section" style="margin-top: 1rem;">
+            <div class="formula-card">
+              <h4 class="formula-title">Selection Rules</h4>
+              <div class="formula-content" style="font-size: 0.8125rem;">
+• <strong>m₁ + m₂ = M</strong> (projection conservation)
+• <strong>|j₁ − j₂| ≤ J ≤ j₁ + j₂</strong> (triangle inequality)
+• <strong>|m₁| ≤ j₁, |m₂| ≤ j₂, |M| ≤ J</strong>
+• All j and J must be integers or half-integers ≥ 0
+• j±m must be non-negative integers (consistency)
+
+If any rule is violated, the coefficient is zero.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>
+        <a href="../index.html" class="footer-link">← Back to Tools</a>
+      </p>
+    </div>
+  </footer>
+
+  <!-- Scripts - Algebrite must load before cg.js -->
+  <script src="../assets/vendor/algebrite.bundle-for-browser.js"></script>
+  <script defer src="../assets/vendor/katex/katex.min.js"></script>
+  <script src="../assets/js/cg.js"></script>
+  <script src="../assets/js/main.js"></script>
+  <script>
+    // Check if Algebrite loaded successfully
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof Algebrite === 'undefined') {
+        console.error('Algebrite library failed to load');
+        const resultsBody = document.getElementById('results-body');
+        resultsBody.innerHTML = `
+          <div class="result-error">
+            <strong>⚠️ Library Error</strong><br>
+            Algebrite library failed to load — calculator unavailable.<br>
+            Please ensure you are accessing this page via a web server or GitHub Pages.
+          </div>
+        `;
+        document.getElementById('status-indicator').className = 'status-indicator error';
+        document.getElementById('status-text').textContent = 'Library Load Error';
+        
+        // Disable the form
+        document.getElementById('calculate-btn').disabled = true;
+      }
+    });
+
+    // DOM Elements
+    const form = document.getElementById('cg-form');
+    const resultsPanel = document.getElementById('results-panel');
+    const resultsBody = document.getElementById('results-body');
+    const statusIndicator = document.getElementById('status-indicator');
+    const statusText = document.getElementById('status-text');
+    const clearBtn = document.getElementById('clear-btn');
+    const exampleBtns = document.querySelectorAll('.example-btn');
+
+    // Input fields
+    const inputs = {
+      j1: document.getElementById('j1'),
+      m1: document.getElementById('m1'),
+      j2: document.getElementById('j2'),
+      m2: document.getElementById('m2'),
+      J: document.getElementById('J'),
+      M: document.getElementById('M')
+    };
+
+    // Example buttons
+    exampleBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const example = JSON.parse(btn.dataset.example);
+        inputs.j1.value = example.j1;
+        inputs.m1.value = example.m1;
+        inputs.j2.value = example.j2;
+        inputs.m2.value = example.m2;
+        inputs.J.value = example.J;
+        inputs.M.value = example.M;
+        
+        // Focus on calculate button
+        document.getElementById('calculate-btn').focus();
+      });
+    });
+
+    // Clear button
+    clearBtn.addEventListener('click', () => {
+      form.reset();
+      clearResults();
+      inputs.j1.focus();
+    });
+
+    // Stepper buttons
+    // j values step by 1/2 (allow half-integer spin), clamp at 0.
+    // m values step by 1 (for fixed j, valid m's differ by integers: j, j-1, ..., -j).
+    (function setupSteppers() {
+      const J_IDS = new Set(['j1', 'j2', 'J']);   // step 1/2, clamp >= 0
+      const M_IDS = new Set(['m1', 'm2', 'M']);   // step 1, no clamp
+
+      function formatVal(v) {
+        const twice = Math.round(v * 2);
+        if (twice % 2 === 0) return String(twice / 2);
+        const sign = twice < 0 ? '-' : '';
+        return `${sign}${Math.abs(twice)}/2`;
+      }
+
+      function parseVal(str) {
+        const s = String(str || '').trim();
+        if (s === '' || s === '-') return 0;
+        if (s.includes('/')) {
+          const [a, b] = s.split('/');
+          const n = parseFloat(a), d = parseFloat(b);
+          if (!isNaN(n) && !isNaN(d) && d !== 0) return n / d;
+          return NaN;
+        }
+        return parseFloat(s);
+      }
+
+      document.querySelectorAll('.stepper').forEach((wrap) => {
+        const id = wrap.dataset.target;
+        const stepSize = M_IDS.has(id) ? 1 : 0.5;
+        const input = wrap.querySelector('input');
+        wrap.querySelectorAll('.stepper-btn').forEach((btn) => {
+          const delta = parseFloat(btn.dataset.step) * stepSize;
+          btn.addEventListener('click', () => {
+            const current = parseVal(input.value);
+            let next = isNaN(current) ? 0 : current + delta;
+            if (J_IDS.has(id) && next < 0) next = 0;
+            input.value = formatVal(next);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          });
+        });
+      });
+
+      // Auto-update M = m1 + m2 whenever m1 or m2 changes
+      const m1El = document.getElementById('m1');
+      const m2El = document.getElementById('m2');
+      const MEl  = document.getElementById('M');
+      function syncM() {
+        const a = parseVal(m1El.value);
+        const b = parseVal(m2El.value);
+        if (isNaN(a) || isNaN(b)) return;
+        MEl.value = formatVal(a + b);
+      }
+      m1El.addEventListener('input', syncM);
+      m2El.addEventListener('input', syncM);
+      syncM(); // initialize from defaults
+    })();
+
+    // Form submission
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      calculate();
+    });
+
+    function calculate() {
+      // Check Algebrite is available
+      if (typeof Algebrite === 'undefined') {
+        showResults({ error: 'Algebrite library is not loaded — calculator unavailable.' });
+        return;
+      }
+
+      const j1 = inputs.j1.value.trim();
+      const m1 = inputs.m1.value.trim();
+      const j2 = inputs.j2.value.trim();
+      const m2 = inputs.m2.value.trim();
+      const J = inputs.J.value.trim();
+      const M = inputs.M.value.trim();
+
+      // Validate all fields
+      if (!j1 || !m1 || !j2 || !m2 || !J || !M) {
+        showResults({ error: 'Please fill in all quantum numbers.' });
+        return;
+      }
+
+      // Show computing state
+      statusIndicator.className = 'status-indicator';
+      statusText.textContent = 'Computing...';
+      resultsBody.innerHTML = '<p style="color: var(--text-muted);" class="loading">Computing symbolic result...</p>';
+
+      // Use setTimeout to allow UI to update
+      setTimeout(() => {
+        try {
+          // Compute CG coefficient
+          const result = computeCG(j1, m1, j2, m2, J, M);
+
+          // Format the input for display
+          const inputStr = `⟨${j1} ${m1} ${j2} ${m2} | ${J} ${M}⟩`;
+          const inputs_obj = { j1, m1, j2, m2, J, M };
+
+          showResults(result, inputStr, inputs_obj);
+        } catch (e) {
+          showResults({ error: `Computation error: ${e.message || e}` });
+        }
+      }, 10);
+    }
+
+    // Convert a quantum-number string (e.g. "1/2", "-3/2", "1") into LaTeX-friendly form.
+    function qnToLatex(s) {
+      s = String(s).trim();
+      if (s.includes('/')) {
+        const [a, b] = s.split('/');
+        const sign = a.trim().startsWith('-') ? '-' : '';
+        const num = a.replace(/^-/, '').trim();
+        return `${sign}\\tfrac{${num}}{${b.trim()}}`;
+      }
+      return s;
+    }
+
+    // Build the bra-ket ⟨ j1 m1 ; j2 m2 | J M ⟩ as LaTeX
+    function inputToLatex(o) {
+      const j1 = qnToLatex(o.j1), m1 = qnToLatex(o.m1);
+      const j2 = qnToLatex(o.j2), m2 = qnToLatex(o.m2);
+      const J  = qnToLatex(o.J),  M  = qnToLatex(o.M);
+      return `\\left\\langle ${j1}\\,${m1};\\,${j2}\\,${m2}\\,\\middle|\\,${J}\\,${M}\\right\\rangle`;
+    }
+
+    // Safely render LaTeX into an element. Falls back to plain text on error.
+    function renderLatex(el, tex, displayMode = true) {
+      if (!el) return;
+      if (typeof katex === 'undefined') {
+        el.textContent = tex;
+        return;
+      }
+      try {
+        katex.render(tex, el, { displayMode, throwOnError: false, output: 'html' });
+      } catch (e) {
+        el.textContent = tex;
+      }
+    }
+
+    function showResults(result, inputStr = '', inputObj = null) {
+      if (result.error) {
+        statusIndicator.className = 'status-indicator error';
+        statusText.textContent = 'Error';
+        resultsBody.innerHTML = `
+          <div class="result-error">
+            <strong>⚠️ Error</strong><br>
+            ${result.error}
+          </div>
+        `;
+        return;
+      }
+
+      if (result.decimal === 0) {
+        statusIndicator.className = 'status-indicator success';
+        statusText.textContent = 'Result: 0';
+        resultsBody.innerHTML = `
+          <div class="result-item">
+            <div class="result-label">Clebsch-Gordan Coefficient</div>
+            <div class="latex-render" id="latex-zero"></div>
+          </div>
+          <div class="result-warning" style="margin-top: 1rem;">
+            <strong>Note:</strong> This coefficient is zero. Check if selection rules are violated or if the quantum numbers are not coupled.
+          </div>
+        `;
+        renderLatex(document.getElementById('latex-zero'), inputObj ? `${inputToLatex(inputObj)} = 0` : '0');
+        return;
+      }
+
+      // Success case
+      statusIndicator.className = 'status-indicator success';
+      statusText.textContent = 'Calculation Complete';
+
+      const decimalStr = formatDecimal(result.decimal);
+      const symbolicStr = result.symbolic || '0';
+      const latexStr = (result.latex && result.latex.length) ? result.latex : symbolicStr;
+
+      let html = `
+        <div class="result-item">
+          <div class="result-label">Rendered</div>
+          <div class="latex-render" id="latex-main"></div>
+        </div>
+        <div class="result-item">
+          <div class="result-label">Symbolic Form</div>
+          <div class="symbolic-result copiable" onclick="copyValue(this)" title="Click to copy">${symbolicStr}</div>
+        </div>
+        <div class="result-item">
+          <div class="result-label">Decimal Value</div>
+          <div class="result-value small copiable" onclick="copyValue(this)" title="Click to copy">${decimalStr}</div>
+        </div>
+      `;
+
+      // Add input representation if provided
+      if (inputStr) {
+        html += `
+          <div class="result-item" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+            <div class="result-label">Input</div>
+            <div style="font-family: var(--font-sans); font-size: 0.9375rem; color: var(--text-secondary);">
+              ${inputStr} = <strong style="color: var(--accent);">${symbolicStr}</strong>
+            </div>
+          </div>
+        `;
+      }
+
+      resultsBody.innerHTML = html;
+
+      // Render LaTeX: main block shows ⟨...|...⟩ = <value>
+      const mainTex = inputObj
+        ? `${inputToLatex(inputObj)} \\;=\\; ${latexStr}`
+        : latexStr;
+      renderLatex(document.getElementById('latex-main'), mainTex);
+    }
+
+    function clearResults() {
+      statusIndicator.className = 'status-indicator';
+      statusText.textContent = 'Enter quantum numbers and click Calculate';
+      resultsBody.innerHTML = `
+        <p style="color: var(--text-muted); font-size: 0.875rem;">
+          Results will appear here after calculation.
+        </p>
+      `;
+    }
+
+    function formatDecimal(num) {
+      if (num === 0) return '0';
+      if (isNaN(num)) return 'NaN';
+      
+      const abs = Math.abs(num);
+      
+      if (abs < 0.0001 || abs > 100000) {
+        return num.toExponential(12);
+      }
+      
+      // Show enough digits to be meaningful
+      return num.toPrecision(12);
+    }
+
+    function copyValue(element) {
+      const text = element.textContent;
+      copyToClipboard(text).then(success => {
+        if (success) {
+          showNotification('Copied to clipboard!', 'success');
+        } else {
+          showNotification('Failed to copy', 'error');
+        }
+      });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      // Ctrl/Cmd + Enter to calculate
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        calculate();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Third-party vendored libraries (download at build/deploy time if needed)
+assets/vendor/
+
+# Python files (not part of the static site)
+*.py
+__pycache__/
+*.pyc
+
+# Font / binary assets
+*.woff
+*.woff2
+*.ttf
+*.otf
+*.eot
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Build / log artifacts
+*.log
+node_modules/
+dist/
+build/

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Partial Wave Analysis Tools - Interactive calculators and visualizations for quantum angular momentum coupling, partial wave analysis, and more.">
+  
+  <title>Partial Wave Analysis Tools | Quantum Angular Momentum Calculators</title>
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="index.html" class="logo">
+          <div class="logo-icon">⚛</div>
+          <span>Partial Wave Analysis Tools</span>
+        </a>
+        <div style="font-size: 0.8125rem; color: var(--text-muted);">
+          Quantum Angular Momentum Tools
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <span>⚛</span>
+          <span>Quantum Mechanics Tools</span>
+        </div>
+        <h1 class="hero-title">Partial Wave Analysis Tools</h1>
+        <p class="hero-subtitle">
+          Interactive calculators for quantum angular momentum coupling. 
+          Exact arithmetic for half-integer quantum numbers.
+        </p>
+        <div class="hero-meta">
+          <div class="hero-meta-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22,4 12,14.01 9,11.01"></polyline>
+            </svg>
+            <span>Exact Results</span>
+          </div>
+          <div class="hero-meta-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12,6 12,12 16,14"></polyline>
+            </svg>
+            <span>No Server Required</span>
+          </div>
+          <div class="hero-meta-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+              <path d="M2 17l10 5 10-5"></path>
+              <path d="M2 12l10 5 10-5"></path>
+            </svg>
+            <span>Half-Integer Support</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tools Section -->
+  <section class="tools-section">
+    <div class="container">
+      <div class="section-header">
+        <h2 class="section-title">Available Tools</h2>
+        <p class="section-subtitle">
+          Specialized calculators for quantum angular momentum calculations
+        </p>
+      </div>
+
+      <div class="tools-grid">
+        <!-- Clebsch-Gordan Calculator -->
+        <a href="tools/cg-calculator.html" class="tool-card">
+          <div class="tool-icon">⟨·|·⟩</div>
+          <h3 class="tool-title">Clebsch-Gordan Coefficient Calculator</h3>
+          <p class="tool-description">
+            Calculate ⟨j₁ m₁ j₂ m₂ | J M⟩ coupling coefficients using the Racah formula. 
+            Supports half-integer quantum numbers with exact rational arithmetic.
+          </p>
+          <span class="tool-cta">
+            Launch Calculator
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Info Section -->
+  <section style="padding: 2rem 0 4rem;">
+    <div class="container">
+      <div class="calc-card">
+        <div class="calc-card-header">
+          <span class="calc-card-icon">ℹ️</span>
+          <h3 class="calc-card-title">About This Toolkit</h3>
+        </div>
+        <div class="calc-card-body">
+          <p style="color: var(--text-secondary); line-height: 1.8;">
+            This toolkit provides exact calculations for quantum angular momentum coupling coefficients. 
+            The <strong style="color: var(--text-primary);">Clebsch-Gordan coefficients</strong> are fundamental 
+            in quantum mechanics, appearing in the addition of angular momenta, selection rules for transitions, 
+            and the transformation between coupled and uncoupled basis states.
+          </p>
+          <p style="color: var(--text-secondary); line-height: 1.8; margin-top: 1rem;">
+            All calculations use <strong style="color: var(--text-primary);">exact rational arithmetic</strong> 
+            (BigInt) to avoid floating-point precision issues. Results are displayed both as decimal values 
+            and in symbolic form (√p/q) when possible.
+          </p>
+          <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-tertiary); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: 0.8125rem; color: var(--text-muted);">
+            <strong style="color: var(--text-secondary);">Features:</strong>
+            <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+              <li>Half-integer quantum numbers (½, ³⁄₂, etc.)</li>
+              <li>Selection rule validation</li>
+              <li>Exact symbolic results</li>
+              <li>Works offline — no server required</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>
+        Partial Wave Analysis Tools — Open Source
+        <span style="margin: 0 0.5rem;">|</span>
+        <a href="https://github.com" class="footer-link">View on GitHub</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="assets/js/main.js"></script>
+</body>
+</html>
