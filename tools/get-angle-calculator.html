@@ -99,6 +99,15 @@
       color: var(--text-primary);
       min-width: 4rem;
     }
+    .node-angle {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      background: rgba(99, 102, 241, 0.1);
+      padding: 0.125rem 0.4rem;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
     .node-final {
       color: var(--success);
       font-size: 0.75rem;
@@ -307,10 +316,11 @@ Selection rules:
       var container = document.getElementById('decay-tree-container');
       container.innerHTML = '';
       nodeId = 0;
-      container.appendChild(renderNode(decayTree, 'Parent', []));
+      var angleIdx = { v: 0 };
+      container.appendChild(renderNode(decayTree, 'Parent', [], angleIdx));
     }
 
-    function renderNode(node, label, path) {
+    function renderNode(node, label, path, angleIdx) {
       var div = document.createElement('div');
       div.className = 'tree-node';
       
@@ -336,6 +346,15 @@ Selection rules:
         updateNodeJ(path, this.value);
       });
       content.appendChild(jInput);
+      
+      // Angle name for decaying nodes
+      if (node.children) {
+        var angleIdxLabel = document.createElement('span');
+        angleIdxLabel.className = 'node-angle';
+        angleIdxLabel.textContent = '(φ' + angleIdx.v + ', θ' + angleIdx.v + ')';
+        content.appendChild(angleIdxLabel);
+        angleIdx.v++;
+      }
       
       // Status button (decay further / final)
       var statusBtn = document.createElement('button');
@@ -370,8 +389,8 @@ Selection rules:
       
       // Render children
       if (node.children) {
-        var child0Div = renderNode(node.children[0], 'Child 1', path.concat(0));
-        var child1Div = renderNode(node.children[1], 'Child 2', path.concat(1));
+        var child0Div = renderNode(node.children[0], 'Child 1', path.concat(0), angleIdx);
+        var child1Div = renderNode(node.children[1], 'Child 2', path.concat(1), angleIdx);
         div.appendChild(child0Div);
         div.appendChild(child1Div);
       }
