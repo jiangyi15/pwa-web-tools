@@ -529,16 +529,9 @@ Selection rules:
         
         for (var j = 0; j < lss.length; j++) {
           var ls = lss[j];
-          var expr = lsDict[ls];
+          var c = lsDict[ls]; // {real, imag} complex number
           
-          var latexExpr = expr;
-          try {
-            latexExpr = Algebrite.run('printlatex(' + expr + ')').trim();
-            latexExpr = latexExpr.replace(/(?<!\\)cos/g, '\\cos');
-            latexExpr = latexExpr.replace(/(?<!\\)sin/g, '\\sin');
-            latexExpr = latexExpr.replace(/(?<!\\)phi/g, '\\phi');
-            latexExpr = latexExpr.replace(/(?<!\\)theta/g, '\\theta');
-          } catch(e) {}
+          var latexExpr = complexToLatex(c);
           
           html += '<tr><td>(' + h + ')</td><td>(' + ls + ')</td><td><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></td></tr>';
         }
@@ -558,6 +551,32 @@ Selection rules:
           }
         });
       }
+    }
+    
+    function complexToLatex(c) {
+      var r = c.real;
+      var i = c.imag;
+      
+      try {
+        r = Algebrite.run('printlatex(' + r + ')').trim();
+        r = r.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
+        r = r.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
+      } catch(e) {}
+      
+      // Check if imag is 0
+      if (i === '0' || i === '') {
+        return r;
+      }
+      
+      try {
+        i = Algebrite.run('printlatex(' + i + ')').trim();
+        i = i.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
+        i = i.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
+      } catch(e) {}
+      
+      if (i === '0') return r;
+      if (r === '0' || r === '') return i + '\\,i';
+      return '(' + r + ' + ' + i + '\\,i)';
     }
 
     function showError(msg) {
