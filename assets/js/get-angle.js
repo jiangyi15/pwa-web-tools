@@ -170,11 +170,19 @@ function formatSpin(s) {
 
 function getHelicities(spin) {
   var s = toSpin(spin);
-  var spin2 = Math.abs(s.num);
+  // For spin = num/den, the helicity values range from -spin to +spin in steps of 1
+  // Using 2*spin as integer for clean arithmetic
+  var spin2 = 2 * s.value; // This is always an integer
+  spin2 = Math.round(spin2); // Ensure it's exactly integer
+  
   var values = [];
+  // h2 goes from -2*spin to +2*spin in steps of 2
+  // So helicity = h2/2 ranges from -spin to +spin in steps of 1
   for (var h2 = -spin2; h2 <= spin2; h2 += 2) {
     values.push({ num: h2, den: 2, value: h2 / 2 });
   }
+  return values;
+}
   return values;
 }
 
@@ -183,9 +191,10 @@ function getLSCombinations(Ja, Jb, Jc) {
   var b = toSpin(Jb);
   var c = toSpin(Jc);
   
-  var Ja2 = Math.abs(a.num);
-  var Jb2 = Math.abs(b.num);
-  var Jc2 = Math.abs(c.num);
+  // Use 2*J as integers for clean arithmetic
+  var Ja2 = Math.round(2 * a.value);
+  var Jb2 = Math.round(2 * b.value);
+  var Jc2 = Math.round(2 * c.value);
   
   var s2_min = Math.abs(Jb2 - Jc2);
   var s2_max = Jb2 + Jc2;
