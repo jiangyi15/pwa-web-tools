@@ -64,12 +64,15 @@ function complexConj(c) {
 
 /**
  * Simplify complex number (both parts)
+ * Uses expand then simplify to help with trigonometric cancellations
  */
 function complexSimplify(c) {
   try {
+    var realExpanded = Algebrite.run('expand(' + c.real + ')').trim();
+    var imagExpanded = Algebrite.run('expand(' + c.imag + ')').trim();
     return {
-      real: Algebrite.run('simplify(' + c.real + ')').trim(),
-      imag: Algebrite.run('simplify(' + c.imag + ')').trim()
+      real: Algebrite.run('simplify(' + realExpanded + ')').trim(),
+      imag: Algebrite.run('simplify(' + imagExpanded + ')').trim()
     };
   } catch (e) {
     return c;
@@ -94,8 +97,9 @@ function complexToLatex(c) {
   var realPart = c.real;
   var imagPart = c.imag;
   
-  // Simplify and convert real part to LaTeX
+  // Expand and simplify real part to LaTeX
   try {
+    realPart = Algebrite.run('expand(' + realPart + ')').trim();
     realPart = Algebrite.run('simplify(' + realPart + ')').trim();
     realPart = Algebrite.run('printlatex(' + realPart + ')').trim();
     realPart = realPart.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
@@ -107,8 +111,9 @@ function complexToLatex(c) {
     return realPart;
   }
   
-  // Simplify and convert imag part to LaTeX
+  // Expand and simplify imag part to LaTeX
   try {
+    imagPart = Algebrite.run('expand(' + imagPart + ')').trim();
     imagPart = Algebrite.run('simplify(' + imagPart + ')').trim();
     imagPart = Algebrite.run('printlatex(' + imagPart + ')').trim();
     imagPart = imagPart.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
@@ -473,8 +478,14 @@ function combineRecursive(amps, node, idx) {
                 var combined = complexMul(prod1, amp1[h1][ls1]);
                 combined = complexSimplify(combined);
                 
+                // SUM over intermediate helicities
                 if (!(fullH in result)) result[fullH] = {};
-                result[fullH][fullLs] = combined;
+                if (!(fullLs in result[fullH])) {
+                  result[fullH][fullLs] = combined;
+                } else {
+                  result[fullH][fullLs] = complexAdd(result[fullH][fullLs], combined);
+                  result[fullH][fullLs] = complexSimplify(result[fullH][fullLs]);
+                }
               }
             }
           }
@@ -493,8 +504,14 @@ function combineRecursive(amps, node, idx) {
             var combined = complexMul(expr, amp0[h0][ls0]);
             combined = complexSimplify(combined);
             
+            // SUM over intermediate helicities
             if (!(fullH in result)) result[fullH] = {};
-            result[fullH][fullLs] = combined;
+            if (!(fullLs in result[fullH])) {
+              result[fullH][fullLs] = combined;
+            } else {
+              result[fullH][fullLs] = complexAdd(result[fullH][fullLs], combined);
+              result[fullH][fullLs] = complexSimplify(result[fullH][fullLs]);
+            }
           }
         }
       } else if (child1Decays) {
@@ -512,8 +529,14 @@ function combineRecursive(amps, node, idx) {
             var combined = complexMul(expr, amp1[h1][ls1]);
             combined = complexSimplify(combined);
             
+            // SUM over intermediate helicities
             if (!(fullH in result)) result[fullH] = {};
-            result[fullH][fullLs] = combined;
+            if (!(fullLs in result[fullH])) {
+              result[fullH][fullLs] = combined;
+            } else {
+              result[fullH][fullLs] = complexAdd(result[fullH][fullLs], combined);
+              result[fullH][fullLs] = complexSimplify(result[fullH][fullLs]);
+            }
           }
         }
       } else {
