@@ -115,14 +115,21 @@ function computeWignerDConj(J, m, mp, phiVar, thetaVar) {
   
   var dExpr = dResult.symbolic;
   
-  // Multiply by exp(i*m*phi)
+  // Multiply by exp(i*m*phi) = cos(m*phi) + i*sin(m*phi)
   if (Math.abs(m) < 1e-10) return dExpr;
   
-  var expFactor = 'exp(i*(' + m + ')*' + phiVar + ')';
-  var fullExpr = '(' + expFactor + ') * (' + dExpr + ')';
+  // Use trigonometric form: cos(m*phi) + i*sin(m*phi)
+  var mStr = String(m);
+  var cosPart = 'cos((' + mStr + ')*' + phiVar + ')';
+  var sinPart = 'sin((' + mStr + ')*' + phiVar + ')';
+  
+  // D* = (cos(m*phi) + i*sin(m*phi)) * d(theta)
+  // = cos(m*phi)*d + i*sin(m*phi)*d
+  var fullExpr = '((' + cosPart + ') + i*(' + sinPart + ')) * (' + dExpr + ')';
   
   try {
-    return Algebrite.run('simplify(' + fullExpr + ')').trim();
+    var expanded = Algebrite.run('expand(' + fullExpr + ')').trim();
+    return Algebrite.run('simplify(' + expanded + ')').trim();
   } catch (e) {
     return fullExpr;
   }
