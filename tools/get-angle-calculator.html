@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Helicity Amplitude Angular Formula Calculator - Compute angular formulas for particle decay chains.">
+  <title>Helicity Amplitude Calculator | Partial Wave Analysis Tools</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+  <style>
+    .input-section {
+      margin-bottom: 1rem;
+    }
+    .input-section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .form-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .form-row .form-input {
+      max-width: 5rem;
+    }
+    .stepper {
+      display: flex;
+      align-items: stretch;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+    .stepper-btn {
+      width: 2rem;
+      border: none;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .stepper-btn:hover {
+      background: var(--accent-glow);
+      color: var(--accent);
+    }
+    .stepper .form-input {
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      padding: 0.4rem 0.25rem;
+      text-align: center;
+      width: 3.5rem;
+    }
+    .latex-render {
+      background: var(--bg-secondary);
+      padding: 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      text-align: center;
+      color: var(--text-primary);
+      font-size: 1rem;
+    }
+    .latex-render .katex {
+      color: var(--accent);
+      font-size: 1.1em;
+    }
+    /* Decay tree styles */
+    .decay-tree {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+    }
+    .tree-node {
+      margin: 0.5rem 0;
+      padding-left: 1.5rem;
+      border-left: 2px solid var(--border);
+    }
+    .tree-node:first-child {
+      margin-top: 0;
+    }
+    .node-content {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0;
+    }
+    .node-label {
+      font-weight: 500;
+      color: var(--text-primary);
+      min-width: 4rem;
+    }
+    .node-final {
+      color: var(--success);
+      font-size: 0.75rem;
+      padding: 0.125rem 0.375rem;
+      background: rgba(16, 185, 129, 0.1);
+      border-radius: 3px;
+    }
+    .node-decays {
+      color: var(--accent);
+      font-size: 0.75rem;
+      padding: 0.125rem 0.375rem;
+      background: rgba(6, 182, 212, 0.1);
+      border-radius: 3px;
+    }
+    .btn-small {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+    }
+    .btn-icon {
+      padding: 0.25rem;
+      min-width: 1.5rem;
+      height: 1.5rem;
+      line-height: 1;
+    }
+    .result-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      margin-top: 0.5rem;
+    }
+    .result-table th, .result-table td {
+      padding: 0.5rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .result-table th {
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .result-table td {
+      background: var(--bg-secondary);
+    }
+    .result-table .katex {
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="../index.html" class="back-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back to Tools
+        </a>
+        <a href="../index.html" class="logo">
+          <div class="logo-icon">⚛</div>
+          <span>Partial Wave Analysis Tools</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="calc-page">
+    <div class="container">
+      <div class="calc-header">
+        <h1 class="calc-title">Helicity Amplitude Calculator</h1>
+        <p class="calc-subtitle">
+          Compute angular formulas for particle decay chains using Wigner D-functions and Clebsch-Gordan coefficients
+        </p>
+      </div>
+
+      <div class="calc-grid">
+        <div>
+          <!-- Input Card -->
+          <div class="calc-card">
+            <div class="calc-card-header">
+              <span class="calc-card-icon">🌳</span>
+              <h3 class="calc-card-title">Decay Tree</h3>
+            </div>
+            <div class="calc-card-body">
+              <div class="input-section">
+                <div class="input-section-title">Build Decay Structure</div>
+                <p class="form-hint" style="margin-bottom: 1rem;">
+                  Set parent spin, then add children. Each child can either be a final state or decay further.
+                </p>
+                
+                <!-- Root node -->
+                <div id="decay-tree-container" class="decay-tree">
+                  <!-- Tree will be rendered here -->
+                </div>
+              </div>
+
+              <div class="btn-group">
+                <button type="button" class="btn btn-primary" id="calculate-btn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 6v6l4 2"></path>
+                  </svg>
+                  Calculate
+                </button>
+                <button type="button" class="btn btn-secondary" id="reset-btn">Reset</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Examples -->
+          <div class="examples-section">
+            <h4 class="examples-title">Load Examples:</h4>
+            <div class="examples-grid">
+              <button type="button" class="example-btn" data-example='simple'>J=0 → J=0 + J=0</button>
+              <button type="button" class="example-btn" data-example='half'>J=1/2 → J=0 + J=0</button>
+              <button type="button" class="example-btn" data-example='cascade1'>J=0 → J=1 + J=1 (cascade)</button>
+              <button type="button" class="example-btn" data-example='cascade2'>J=1/2 → J=1/2 + J=0 (cascade)</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <!-- Results Panel -->
+          <div class="results-panel" id="results-panel">
+            <div class="results-header">
+              <div class="results-status">
+                <span class="status-indicator" id="status-indicator"></span>
+                <span id="status-text">Build a decay tree and click Calculate</span>
+              </div>
+            </div>
+            <div class="results-body" id="results-body">
+              <p style="color: var(--text-muted); font-size: 0.875rem;">
+                Results will appear here after calculation.
+              </p>
+            </div>
+          </div>
+
+          <!-- Formula Card -->
+          <div class="formula-section">
+            <div class="formula-card">
+              <h4 class="formula-title">Helicity Amplitude Formula</h4>
+              <div class="formula-content" style="font-size: 0.8125rem;">
+For decay A → B + C, the angular part of the helicity amplitude is:
+
+T<sub>l,s</sub> = √((2l+1)/(2J<sub>A</sub>+1)) × CG(J<sub>B</sub>,λ<sub>B</sub>; J<sub>C</sub>,-λ<sub>C</sub> | s,δ) × CG(l,0; s,δ | J<sub>A</sub>,δ) × D<sup>J<sub>A</sub>*</sup><sub>λ<sub>A</sub>,δ</sub>(φ,θ)
+
+where:
+• δ = λ<sub>B</sub> - λ<sub>C</sub>
+• l = orbital angular momentum (integer)
+• s = total spin of B+C system
+• D<sup>*</sup> = Wigner D-matrix conjugate
+
+Selection rules:
+• |J<sub>B</sub>-J<sub>C</sub>| ≤ s ≤ J<sub>B</sub>+J<sub>C</sub>
+• |l-s| ≤ J<sub>A</sub> ≤ l+s
+• |δ| ≤ J<sub>A</sub>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p><a href="../index.html" class="footer-link">← Back to Tools</a></p>
+    </div>
+  </footer>
+
+  <script src="../assets/vendor/algebrite.bundle-for-browser.js"></script>
+  <script defer src="../assets/vendor/katex/katex.min.js"></script>
+  <script src="../assets/js/cg.js"></script>
+  <script src="../assets/js/wigner-d.js"></script>
+  <script src="../assets/js/get-angle.js"></script>
+  <script src="../assets/js/main.js"></script>
+  <script>
+    // Decay tree data structure
+    var decayTree = {
+      j: 0,
+      children: [
+        { j: 0, children: null },
+        { j: 0, children: null }
+      ]
+    };
+
+    // Node path tracking for UI updates
+    var nodeId = 0;
+
+    function createNode(j, children) {
+      return { j: j || 0, children: children || null };
+    }
+
+    function renderTree() {
+      var container = document.getElementById('decay-tree-container');
+      container.innerHTML = '';
+      nodeId = 0;
+      container.appendChild(renderNode(decayTree, 'Parent', []));
+    }
+
+    function renderNode(node, label, path) {
+      var div = document.createElement('div');
+      div.className = 'tree-node';
+      
+      var content = document.createElement('div');
+      content.className = 'node-content';
+      
+      // Label
+      var labelEl = document.createElement('span');
+      labelEl.className = 'node-label';
+      labelEl.textContent = label;
+      content.appendChild(labelEl);
+      
+      // J= input
+      content.appendChild(document.createTextNode('J='));
+      var jInput = document.createElement('input');
+      jInput.type = 'text';
+      jInput.className = 'form-input';
+      jInput.style.width = '3rem';
+      jInput.style.padding = '0.25rem';
+      jInput.value = formatSpinValue(node.j);
+      jInput.dataset.path = path.join(',');
+      jInput.addEventListener('change', function() {
+        updateNodeJ(path, this.value);
+      });
+      content.appendChild(jInput);
+      
+      // Status button (decay further / final)
+      var statusBtn = document.createElement('button');
+      statusBtn.type = 'button';
+      statusBtn.className = 'btn btn-secondary btn-small';
+      if (node.children) {
+        statusBtn.textContent = 'Decays';
+        statusBtn.className = 'btn btn-secondary btn-small node-decays';
+      } else {
+        statusBtn.textContent = 'Final';
+        statusBtn.className = 'btn btn-secondary btn-small node-final';
+      }
+      statusBtn.addEventListener('click', function() {
+        toggleNodeDecay(path);
+      });
+      content.appendChild(statusBtn);
+      
+      // Remove button (only for non-root)
+      if (path.length > 0) {
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-secondary btn-small';
+        removeBtn.textContent = '×';
+        removeBtn.style.marginLeft = '0.25rem';
+        removeBtn.addEventListener('click', function() {
+          removeNode(path);
+        });
+        content.appendChild(removeBtn);
+      }
+      
+      div.appendChild(content);
+      
+      // Render children
+      if (node.children) {
+        var child0Div = renderNode(node.children[0], 'Child 1', path.concat(0));
+        var child1Div = renderNode(node.children[1], 'Child 2', path.concat(1));
+        div.appendChild(child0Div);
+        div.appendChild(child1Div);
+      }
+      
+      return div;
+    }
+
+    function formatSpinValue(j) {
+      if (j === 0.5 || j === '1/2') return '1/2';
+      if (j === -0.5 || j === '-1/2') return '-1/2';
+      return String(j);
+    }
+
+    function getNodeByPath(path) {
+      var node = decayTree;
+      for (var i = 0; i < path.length; i++) {
+        node = node.children[path[i]];
+      }
+      return node;
+    }
+
+    function updateNodeJ(path, value) {
+      var node = getNodeByPath(path);
+      var s = toSpin(value);
+      node.j = s.value;
+      renderTree();
+    }
+
+    function toggleNodeDecay(path) {
+      var node = getNodeByPath(path);
+      if (node.children) {
+        // Make it final
+        node.children = null;
+      } else {
+        // Make it decay
+        node.children = [
+          { j: 0, children: null },
+          { j: 0, children: null }
+        ];
+      }
+      renderTree();
+    }
+
+    function removeNode(path) {
+      if (path.length === 0) return; // Can't remove root
+      
+      // Find parent and set to final
+      var parentPath = path.slice(0, -1);
+      var childIdx = path[path.length - 1];
+      var parent = getNodeByPath(parentPath);
+      
+      // Replace this node with a final state
+      var siblingIdx = childIdx === 0 ? 1 : 0;
+      parent.children[childIdx] = { j: 0, children: null };
+      
+      renderTree();
+    }
+
+    function loadExample(name) {
+      switch (name) {
+        case 'simple':
+          decayTree = { j: 0, children: [{ j: 0, children: null }, { j: 0, children: null }] };
+          break;
+        case 'half':
+          decayTree = { j: 0.5, children: [{ j: 0, children: null }, { j: 0, children: null }] };
+          break;
+        case 'cascade1':
+          decayTree = {
+            j: 0,
+            children: [
+              { j: 1, children: [{ j: 0, children: null }, { j: 0, children: null }] },
+              { j: 1, children: [{ j: 0, children: null }, { j: 0, children: null }] }
+            ]
+          };
+          break;
+        case 'cascade2':
+          decayTree = {
+            j: 0.5,
+            children: [
+              { j: 0.5, children: [{ j: 0, children: null }, { j: 0, children: null }] },
+              { j: 0, children: null }
+            ]
+          };
+          break;
+      }
+      renderTree();
+      document.getElementById('calculate-btn').focus();
+    }
+
+    // Event handlers
+    document.getElementById('calculate-btn').addEventListener('click', calculate);
+    document.getElementById('reset-btn').addEventListener('click', function() {
+      decayTree = { j: 0, children: [{ j: 0, children: null }, { j: 0, children: null }] };
+      renderTree();
+      clearResults();
+    });
+
+    document.querySelectorAll('.example-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        loadExample(this.dataset.example);
+      });
+    });
+
+    function calculate() {
+      if (typeof Algebrite === 'undefined') {
+        showError('Algebrite library is not loaded.');
+        return;
+      }
+      
+      if (!decayTree.children) {
+        showError('Root particle must decay. Click "Final" to make it decay.');
+        return;
+      }
+
+      var statusIndicator = document.getElementById('status-indicator');
+      var statusText = document.getElementById('status-text');
+      var resultsBody = document.getElementById('results-body');
+      
+      statusIndicator.className = 'status-indicator';
+      statusText.textContent = 'Computing...';
+      resultsBody.innerHTML = '<p style="color: var(--text-muted);" class="loading">Computing angular formulas...</p>';
+
+      setTimeout(function() {
+        try {
+          var result = getAngleFormula(decayTree);
+          
+          if (result.error) {
+            showError(result.error);
+            return;
+          }
+          
+          showResults(result);
+        } catch (e) {
+          showError('Computation error: ' + (e.message || e));
+        }
+      }, 10);
+    }
+
+    function showResults(result) {
+      var statusIndicator = document.getElementById('status-indicator');
+      var statusText = document.getElementById('status-text');
+      var resultsBody = document.getElementById('results-body');
+      
+      var nHelicities = Object.keys(result.helicities).length;
+      if (nHelicities === 0) {
+        statusIndicator.className = 'status-indicator error';
+        statusText.textContent = 'No valid amplitudes';
+        resultsBody.innerHTML = '<p style="color: var(--text-muted);">No valid helicity combinations found. Check selection rules.</p>';
+        return;
+      }
+      
+      statusIndicator.className = 'status-indicator success';
+      statusText.textContent = 'Found ' + nHelicities + ' helicity combination(s)';
+      
+      // Build results table
+      var html = '<div class="result-item"><div class="result-label">Angles: ' + result.angles.join('; ') + '</div></div>';
+      html += '<div class="result-item"><div class="result-label">Angular Formulas</div>';
+      html += '<table class="result-table"><thead><tr><th>λ</th><th>LS</th><th>T(φ,θ)</th></tr></thead><tbody>';
+      
+      var hs = Object.keys(result.helicities).sort();
+      for (var i = 0; i < hs.length; i++) {
+        var h = hs[i];
+        var lsDict = result.helicities[h];
+        var lss = Object.keys(lsDict).sort();
+        
+        for (var j = 0; j < lss.length; j++) {
+          var ls = lss[j];
+          var expr = lsDict[ls];
+          
+          var latexExpr = expr;
+          try {
+            latexExpr = Algebrite.run('printlatex(' + expr + ')').trim();
+            latexExpr = latexExpr.replace(/(?<!\\)cos/g, '\\cos');
+            latexExpr = latexExpr.replace(/(?<!\\)sin/g, '\\sin');
+            latexExpr = latexExpr.replace(/(?<!\\)phi/g, '\\phi');
+            latexExpr = latexExpr.replace(/(?<!\\)theta/g, '\\theta');
+          } catch(e) {}
+          
+          html += '<tr><td>(' + h + ')</td><td>(' + ls + ')</td><td><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></td></tr>';
+        }
+      }
+      
+      html += '</tbody></table></div>';
+      
+      resultsBody.innerHTML = html;
+      
+      // Render LaTeX in cells
+      if (typeof katex !== 'undefined') {
+        resultsBody.querySelectorAll('.latex-cell').forEach(function(el) {
+          try {
+            katex.render(el.dataset.latex, el, { displayMode: false, throwOnError: false });
+          } catch(e) {
+            el.textContent = el.dataset.latex;
+          }
+        });
+      }
+    }
+
+    function showError(msg) {
+      document.getElementById('status-indicator').className = 'status-indicator error';
+      document.getElementById('status-text').textContent = 'Error';
+      document.getElementById('results-body').innerHTML = '<div class="result-error"><strong>⚠️ Error</strong><br>' + msg + '</div>';
+    }
+
+    function clearResults() {
+      document.getElementById('status-indicator').className = 'status-indicator';
+      document.getElementById('status-text').textContent = 'Build a decay tree and click Calculate';
+      document.getElementById('results-body').innerHTML = '<p style="color: var(--text-muted); font-size: 0.875rem;">Results will appear here after calculation.</p>';
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Check Algebrite loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof Algebrite === 'undefined') {
+        document.getElementById('results-body').innerHTML = '<div class="result-error"><strong>⚠️ Library Error</strong><br>Algebrite library failed to load.</div>';
+        document.getElementById('calculate-btn').disabled = true;
+      }
+      renderTree();
+    });
+  </script>
+</body>
+</html>
