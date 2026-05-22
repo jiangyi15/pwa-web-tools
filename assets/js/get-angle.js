@@ -99,8 +99,7 @@ function complexToLatex(c) {
   
   // Expand and simplify real part to LaTeX
   try {
-    realPart = Algebrite.run('expand(' + realPart + ')').trim();
-    realPart = Algebrite.run('simplify(' + realPart + ')').trim();
+    realPart = Algebrite.run('simplify(expand(' + realPart + '))').trim();
     realPart = Algebrite.run('printlatex(' + realPart + ')').trim();
     realPart = realPart.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
     realPart = realPart.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
@@ -113,8 +112,7 @@ function complexToLatex(c) {
   
   // Expand and simplify imag part to LaTeX
   try {
-    imagPart = Algebrite.run('expand(' + imagPart + ')').trim();
-    imagPart = Algebrite.run('simplify(' + imagPart + ')').trim();
+    imagPart = Algebrite.run('simplify(expand(' + imagPart + '))').trim();
     imagPart = Algebrite.run('printlatex(' + imagPart + ')').trim();
     imagPart = imagPart.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
     imagPart = imagPart.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
@@ -1214,7 +1212,9 @@ function getAngleFormulaSimplified(decayTree) {
         if (imagStrs.length === 0) {
           imagAlg = '0';
         } else {
-          imagAlg = 'i*((' + imagStrs.join(')+(').replace(/\+\-/g,'-') + '))';
+          // No i prefix — imag is the real-valued coefficient of i
+          imagAlg = imagStrs.join('+').replace(/\+\+/g,'+').replace(/\+\-/g,'-');
+          if (imagAlg[0] === '+') imagAlg = imagAlg.substring(1);
         }
         
         var expanded = Algebrite.run('expand(' + realAlg + ')').trim();
