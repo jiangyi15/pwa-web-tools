@@ -120,13 +120,13 @@ function complexToLatex(c) {
     return realPart;
   }
   
-  // Purely imaginary
+  // Purely imaginary: (imagPart)i
   if (realPart === '0' || realPart === '') {
-    return imagPart + '\\,i';
+    return '(' + imagPart + ')i';
   }
   
-  // Complex: real + i*imag
-  return '(' + realPart + ' + ' + imagPart + '\\,i)';
+  // Complex: realPart + (imagPart)i
+  return realPart + ' + (' + imagPart + ')i';
 }
 
 // ============================================================================
