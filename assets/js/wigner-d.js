@@ -384,11 +384,207 @@ function runWignerDSanityChecks() {
   return { passed: passed, failed: failed };
 }
 
+// ============================================================================
+// STRUCTURED WIGNER-d TERMS (pre-simplification)
+// ============================================================================
+
+/**
+ * Get raw Wigner-d terms BEFORE Algebrite simplification.
+ * Each term has the form: weight * sin^l(beta/2) * cos^{2j-l}(beta/2)
+ *
+ * @param {number} jVal - angular momentum (float, can be half-integer)
+ * @param {number} m1Val - projection m1
+ * @param {number} m2Val - projection m2
+ * @returns {{terms: Array<{weight: number, sinPow: number, cosPow: number}>}} 
+ *          weight is the exact numerical coefficient.
+ */
+function getWignerDTerms(jVal, m1Val, m2Val) {
+  var twoJ = Math.round(2 * jVal);
+  if (Math.abs(2 * jVal - twoJ) > 1e-10) {
+    return { error: 'j = ' + jVal + ' is not integer or half-integer' };
+  }
+
+  var jPlusM1 = Math.round(jVal + m1Val);
+  var jMinusM1 = Math.round(jVal - m1Val);
+  var jPlusM2 = Math.round(jVal + m2Val);
+  var jMinusM2 = Math.round(jVal - m2Val);
+
+  if (Math.abs((jVal + m1Val) - jPlusM1) > 1e-10 ||
+      Math.abs((jVal + m2Val) - jPlusM2) > 1e-10) {
+    return { error: 'j ± m must be integer' };
+  }
+  if (Math.abs(m1Val) - jVal > 1e-10 || Math.abs(m2Val) - jVal > 1e-10) {
+    return { error: '|m| <= j violated' };
+  }
+
+  // Precompute factorials
+  var maxN = Math.max(jPlusM1, jMinusM1, jPlusM2, jMinusM2, twoJ + 2);
+  var facts = _factorials(maxN);
+
+  var prefactor = Math.sqrt(facts[jPlusM1] * facts[jMinusM1] *
+                            facts[jPlusM2] * facts[jMinusM2]);
+
+  var terms = [];
+  for (var l = 0; l <= twoJ; l++) {
+    var k = (l + m2Val - m1Val) / 2;
+    if (Math.abs(k - Math.round(k)) > 1e-10) continue;
+    k = Math.round(k);
+    if (k < Math.max(0, m2Val - m1Val) - 1e-10) continue;
+    if (k > Math.min(jMinusM1, jPlusM2) + 1e-10) continue;
+
+    var sign = ((Math.round(m1Val - m2Val) + k) % 2 === 0) ? 1 : -1;
+
+    var d1 = jMinusM1 - k;
+    var d2 = jPlusM2 - k;
+    var d3 = Math.round(m1Val - m2Val) + k;
+    var d4 = k;
+    if (d1 < 0 || d2 < 0 || d3 < 0 || d4 < 0) continue;
+
+    var denom = facts[d1] * facts[d2] * facts[d3] * facts[d4];
+    if (denom === 0) continue;
+    var weight = sign * prefactor / denom;
+
+    terms.push({
+      weight: weight,
+      sinPow: l,
+      cosPow: twoJ - l
+    });
+  }
+
+  return { terms: terms };
+}
+
+// Factorial cache
+var _factCache = [1];
+function _factorials(n) {
+  for (var i = _factCache.length; i <= n; i++) {
+    _factCache[i] = _factCache[i - 1] * i;
+  }
+  return _factCache;
+}
+
+// ============================================================================
+// HALF-ANGLE EXPANSION TABLES
+// ============================================================================
+
+/**
+ * Pre-computed expansion of sin^b(θ/2) * cos^c(θ/2) into
+ * basis of {1, cos(kθ/2), sin(kθ/2)} for k=1..(b+c).
+ * Each entry: { coeff, func: "cos"|"sin"|"1", k }
+ * k=0 means constant (func="1"), k>0 is the multiplier of θ/2.
+ */
+var _halfAngleTable = {
+  '0,0': [ {c:1, f:'1', k:0} ],
+  '0,1': [ {c:1, f:'cos', k:1} ],
+  '1,0': [ {c:1, f:'sin', k:1} ],
+  '0,2': [ {c:0.5, f:'1', k:0},  {c:0.5, f:'cos', k:2} ],
+  '1,1': [ {c:0.5, f:'sin', k:2} ],
+  '2,0': [ {c:0.5, f:'1', k:0},  {c:-0.5, f:'cos', k:2} ],
+  '0,3': [ {c:0.75, f:'cos', k:1}, {c:0.25, f:'cos', k:3} ],
+  '1,2': [ {c:0.25, f:'sin', k:1}, {c:0.25, f:'sin', k:3} ],
+  '2,1': [ {c:0.25, f:'sin', k:1}, {c:-0.25, f:'sin', k:3} ],
+  '3,0': [ {c:0.75, f:'sin', k:1}, {c:-0.25, f:'sin', k:3} ],
+  '0,4': [ {c:0.375, f:'1', k:0}, {c:0.5,  f:'cos', k:2}, {c:0.125, f:'cos', k:4} ],
+  '1,3': [ {c:0.25, f:'sin', k:2}, {c:0.125, f:'sin', k:4} ],
+  '2,2': [ {c:0.125, f:'1', k:0}, {c:-0.125, f:'cos', k:4} ],
+  '3,1': [ {c:0.25, f:'sin', k:2}, {c:-0.125, f:'sin', k:4} ],
+  '4,0': [ {c:0.375, f:'1', k:0}, {c:-0.5, f:'cos', k:2}, {c:0.125, f:'cos', k:4} ],
+  '0,5': [ {c:0.625, f:'cos', k:1}, {c:0.3125, f:'cos', k:3}, {c:0.0625, f:'cos', k:5} ],
+  '1,4': [ {c:0.3125, f:'sin', k:1}, {c:0.1875, f:'sin', k:3}, {c:0.0625, f:'sin', k:5} ],
+  '2,3': [ {c:0.0625, f:'sin', k:1}, {c:0.0625, f:'sin', k:3}, {c:-0.0625, f:'sin', k:5} ],
+  '3,2': [ {c:0.0625, f:'cos', k:1}, {c:-0.0625, f:'cos', k:3}, {c:-0.0625, f:'cos', k:5} ],
+  '4,1': [ {c:0.3125, f:'cos', k:1}, {c:-0.1875, f:'cos', k:3}, {c:0.0625, f:'cos', k:5} ],
+  '5,0': [ {c:0.625, f:'sin', k:1}, {c:-0.3125, f:'sin', k:3}, {c:0.0625, f:'sin', k:5} ],
+  '0,6': [ {c:0.3125, f:'1', k:0}, {c:0.46875, f:'cos', k:2}, {c:0.1875, f:'cos', k:4}, {c:0.03125, f:'cos', k:6} ],
+  '1,5': [ {c:0.1875, f:'sin', k:2}, {c:0.09375, f:'sin', k:4}, {c:0.03125, f:'sin', k:6} ],
+  '2,4': [ {c:0.0625, f:'1', k:0}, {c:0.03125, f:'cos', k:2}, {c:-0.0625, f:'cos', k:4}, {c:-0.03125, f:'cos', k:6} ],
+  '3,3': [ {c:0.09375, f:'sin', k:2}, {c:-0.03125, f:'sin', k:6} ],
+  '4,2': [ {c:0.0625, f:'1', k:0}, {c:-0.03125, f:'cos', k:2}, {c:-0.0625, f:'cos', k:4}, {c:0.03125, f:'cos', k:6} ],
+  '5,1': [ {c:0.1875, f:'sin', k:2}, {c:-0.09375, f:'sin', k:4}, {c:0.03125, f:'sin', k:6} ],
+  '6,0': [ {c:0.3125, f:'1', k:0}, {c:-0.46875, f:'cos', k:2}, {c:0.1875, f:'cos', k:4}, {c:-0.03125, f:'cos', k:6} ],
+};
+
+/**
+ * Expand sin^b(θ/2) * cos^c(θ/2) into basis functions.
+ * Returns array of {coeff: number, func: "cos"|"sin"|"1", k: number}
+ * Uses precomputed table for small powers (up to b+c=6), 
+ * falls back to binomial computation for higher powers.
+ */
+function expandHalfAngleBasis(sinPow, cosPow) {
+  var key = sinPow + ',' + cosPow;
+  if (_halfAngleTable[key]) {
+    return _halfAngleTable[key].map(function(e) {
+      return { coeff: e.c, func: e.f, k: e.k };
+    });
+  }
+  return _computeHalfAngleBasis(sinPow, cosPow);
+}
+
+function _computeHalfAngleBasis(sinPow, cosPow) {
+  // Binomial expansion fallback for high powers
+  var b = sinPow, c = cosPow, N = b + c;
+  var denom = Math.pow(2, N);
+  
+  // Compute e^{imx} coefficients
+  var eCoeffs = {};
+  var binomFacts = _factorials(N);
+  for (var j = 0; j <= b; j++) {
+    for (var vk = 0; vk <= c; vk++) {
+      var m = N - 2*j - 2*vk;
+      var sign = (j % 2 === 0) ? 1 : -1;
+      var coeff = sign * _binom(b, j, binomFacts) * _binom(c, vk, binomFacts);
+      eCoeffs['m' + m] = (eCoeffs['m' + m] || 0) + coeff;
+    }
+  }
+  
+  // Determine basis type and extra sign from i^b
+  var extraSign = 1;
+  if (b % 4 === 2 || b % 4 === 3) extraSign = -1;
+  
+  var isSine = (b % 2 === 1);
+  
+  var result = [];
+  for (var m = 0; m <= N; m += 2) {
+    var coeff;
+    if (m === 0) {
+      coeff = (eCoeffs['m0'] || 0) / denom * extraSign;
+    } else {
+      var cp = eCoeffs['m' + m] || 0;
+      var cm = eCoeffs['m' + (-m)] || 0;
+      if (isSine) {
+        coeff = (cp - cm) / denom * extraSign * (b % 4 === 1 ? 1 : -1);
+      } else {
+        coeff = (cp + cm) / denom * extraSign;
+      }
+    }
+    
+    if (Math.abs(coeff) < 1e-14) continue;
+    
+    result.push({
+      coeff: coeff,
+      func: m === 0 ? '1' : (isSine ? 'sin' : 'cos'),
+      k: m,
+      halfAngle: true
+    });
+  }
+  
+  return result;
+}
+
+function _binom(n, k, facts) {
+  if (k < 0 || k > n) return 0;
+  if (!facts) facts = _factorials(n);
+  return Math.round(facts[n] / (facts[k] * facts[n - k]));
+}
+
+
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     computeWignerD: computeWignerD,
     computeWignerDMatrix: computeWignerDMatrix,
-    runWignerDSanityChecks: runWignerDSanityChecks
+    runWignerDSanityChecks: runWignerDSanityChecks,
+    getWignerDTerms: getWignerDTerms,
+    expandHalfAngleBasis: expandHalfAngleBasis
   };
 }
