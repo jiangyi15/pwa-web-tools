@@ -6,7 +6,6 @@
   <meta name="description" content="Helicity Amplitude Angular Formula Calculator - Compute angular formulas for particle decay chains.">
   <title>Helicity Amplitude Calculator | Partial Wave Analysis Tools</title>
   <link rel="stylesheet" href="../assets/css/style.css">
-  <link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
   <style>
     .input-section {
       margin-bottom: 1rem;
@@ -68,7 +67,7 @@
       color: var(--text-primary);
       font-size: 1rem;
     }
-    .latex-render .katex {
+    .latex-render .MathJax {
       color: var(--accent);
       font-size: 1.1em;
     }
@@ -143,7 +142,7 @@
     .result-table td {
       background: var(--bg-secondary);
     }
-    .result-table .katex {
+    .result-table .MathJax {
       font-size: 0.9em;
     }
   </style>
@@ -270,8 +269,19 @@ Selection rules:
     </div>
   </footer>
 
+  <script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(', '\\)']],
+      displayMath: [['\\[', '\\]']]
+    },
+    options: {
+      enableMenu: true
+    }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
   <script src="../assets/vendor/algebrite.bundle-for-browser.js"></script>
-  <script defer src="../assets/vendor/katex/katex.min.js"></script>
   <script src="../assets/js/cg.js"></script>
   <script src="../assets/js/wigner-d.js"></script>
   <script src="../assets/js/get-angle.js"></script>
@@ -542,14 +552,13 @@ Selection rules:
       resultsBody.innerHTML = html;
       
       // Render LaTeX in cells
-      if (typeof katex !== 'undefined') {
-        resultsBody.querySelectorAll('.latex-cell').forEach(function(el) {
-          try {
-            katex.render(el.dataset.latex, el, { displayMode: false, throwOnError: false });
-          } catch(e) {
-            el.textContent = el.dataset.latex;
-          }
-        });
+      if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+        var spans = resultsBody.querySelectorAll('.latex-cell');
+        for (var i = 0; i < spans.length; i++) {
+          if (MathJax.typesetClear) MathJax.typesetClear([spans[i]]);
+          spans[i].innerHTML = '\\(' + spans[i].dataset.latex + '\\)';
+        }
+        MathJax.typesetPromise(spans).catch(function(err) {});
       }
     }
     

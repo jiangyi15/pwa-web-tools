@@ -183,8 +183,6 @@ function getHelicities(spin) {
   }
   return values;
 }
-  return values;
-}
 
 function getLSCombinations(Ja, Jb, Jc) {
   var a = toSpin(Ja);

@@ -6,7 +6,6 @@
   <meta name="description" content="Wigner d-Matrix Calculator - Compute Wigner small d-matrix elements with exact symbolic computation.">
   <title>Wigner d-Matrix Calculator | Partial Wave Analysis Tools</title>
   <link rel="stylesheet" href="../assets/css/style.css">
-  <link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
   <style>
     .input-section {
       margin-bottom: 1rem;
@@ -136,7 +135,7 @@
       justify-content: center;
     }
 
-    .latex-render .katex {
+    .latex-render .MathJax {
       color: var(--accent, var(--text-primary));
       font-size: 1.25em;
     }
@@ -214,7 +213,7 @@
       opacity: 0.5;
     }
 
-    .matrix-table .katex {
+    .matrix-table .MathJax {
       font-size: 0.9em;
     }
 
@@ -432,8 +431,19 @@ Otherwise w<sub>l</sub> = 0.</div>
   </footer>
 
   <!-- Scripts -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']]
+      },
+      options: {
+        enableMenu: true
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
   <script src="../assets/vendor/algebrite.bundle-for-browser.js"></script>
-  <script defer src="../assets/vendor/katex/katex.min.js"></script>
   <script src="../assets/js/wigner-d.js"></script>
   <script src="../assets/js/main.js"></script>
   <script>
@@ -626,15 +636,15 @@ Otherwise w<sub>l</sub> = 0.</div>
 
     function renderLatex(el, tex, displayMode) {
       if (!el) return;
-      if (typeof katex === 'undefined') {
+      if (typeof MathJax === 'undefined' || !MathJax.typesetPromise) {
         el.textContent = tex;
         return;
       }
-      try {
-        katex.render(tex, el, { displayMode: displayMode !== false, throwOnError: false, output: 'html' });
-      } catch (e) {
+      if (MathJax.typesetClear) MathJax.typesetClear([el]);
+      el.innerHTML = (displayMode !== false) ? '\\[' + tex + '\\]' : '\\(' + tex + '\\)';
+      MathJax.typesetPromise([el]).catch(function(err) {
         el.textContent = tex;
-      }
+      });
     }
 
     function showSingleResult(result, j, m1, m2, beta) {
@@ -700,16 +710,14 @@ Otherwise w<sub>l</sub> = 0.</div>
       resultsBody.innerHTML = html;
 
       // Render inline LaTeX in matrix cells
-      if (typeof katex !== 'undefined') {
+      if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
         var spans = resultsBody.querySelectorAll('.latex-inline');
         for (var i = 0; i < spans.length; i++) {
           var tex = spans[i].dataset.latex;
-          try {
-            katex.render(tex, spans[i], { displayMode: false, throwOnError: false, output: 'html' });
-          } catch (e) {
-            spans[i].textContent = tex;
-          }
+          if (MathJax.typesetClear) MathJax.typesetClear([spans[i]]);
+          spans[i].innerHTML = '\\(' + tex + '\\)';
         }
+        MathJax.typesetPromise(spans).catch(function(err) {});
       }
     }
 

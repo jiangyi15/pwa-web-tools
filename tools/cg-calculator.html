@@ -6,7 +6,6 @@
   <meta name="description" content="Clebsch-Gordan Coefficient Calculator - Compute quantum angular momentum coupling coefficients with exact symbolic computation.">
   <title>Clebsch-Gordan Calculator | Partial Wave Analysis Tools</title>
   <link rel="stylesheet" href="../assets/css/style.css">
-  <link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
   <style>
     /* Additional styles for calculator page */
     .input-section {
@@ -160,13 +159,13 @@
       justify-content: center;
     }
 
-    .latex-render .katex {
+    .latex-render .MathJax {
       color: var(--accent, var(--text-primary));
       font-size: 1.25em;
     }
 
     /* Inline LaTeX inside the "Input = result" line */
-    .latex-inline .katex {
+    .latex-inline .MathJax {
       color: var(--accent);
     }
   </style>
@@ -372,8 +371,19 @@ If any rule is violated, the coefficient is zero.</div>
   </footer>
 
   <!-- Scripts - Algebrite must load before cg.js -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']]
+      },
+      options: {
+        enableMenu: true
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
   <script src="../assets/vendor/algebrite.bundle-for-browser.js"></script>
-  <script defer src="../assets/vendor/katex/katex.min.js"></script>
   <script src="../assets/js/cg.js"></script>
   <script src="../assets/js/main.js"></script>
   <script>
@@ -565,17 +575,17 @@ If any rule is violated, the coefficient is zero.</div>
     }
 
     // Safely render LaTeX into an element. Falls back to plain text on error.
-    function renderLatex(el, tex, displayMode = true) {
+    function renderLatex(el, tex, displayMode) {
       if (!el) return;
-      if (typeof katex === 'undefined') {
+      if (typeof MathJax === 'undefined' || !MathJax.typesetPromise) {
         el.textContent = tex;
         return;
       }
-      try {
-        katex.render(tex, el, { displayMode, throwOnError: false, output: 'html' });
-      } catch (e) {
+      if (MathJax.typesetClear) MathJax.typesetClear([el]);
+      el.innerHTML = (displayMode !== false) ? '\\[' + tex + '\\]' : '\\(' + tex + '\\)';
+      MathJax.typesetPromise([el]).catch(function(err) {
         el.textContent = tex;
-      }
+      });
     }
 
     function showResults(result, inputStr = '', inputObj = null) {
