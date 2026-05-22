@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Wigner d-Matrix Calculator - Compute Wigner small d-matrix elements with exact symbolic computation.">
+  <title>Wigner d-Matrix Calculator | Partial Wave Analysis Tools</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <link rel="stylesheet" href="../assets/vendor/katex/katex.min.css">
+  <style>
+    .input-section {
+      margin-bottom: 1rem;
+    }
+
+    .input-section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .qn-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .qn-grid .form-group {
+      margin-bottom: 0;
+      min-width: 0;
+    }
+
+    .qn-grid .form-label {
+      margin-bottom: 0.3rem;
+      text-align: center;
+    }
+
+    .stepper {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+
+    .stepper:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .stepper-btn {
+      flex: 0 0 auto;
+      width: 2rem;
+      border: none;
+      background: var(--bg-tertiary, var(--bg-secondary));
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      font-weight: 600;
+      line-height: 1;
+      cursor: pointer;
+      user-select: none;
+      transition: background var(--transition-fast), color var(--transition-fast);
+    }
+
+    .stepper-btn:hover {
+      background: var(--accent-glow, rgba(6,182,212,0.15));
+      color: var(--accent, var(--text-primary));
+    }
+
+    .stepper-btn:active {
+      transform: translateY(1px);
+    }
+
+    .stepper .form-input {
+      flex: 1 1 auto;
+      width: auto;
+      max-width: none;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      padding: 0.5rem 0.25rem;
+      min-width: 0;
+    }
+
+    .stepper .form-input:focus {
+      outline: none;
+      box-shadow: none;
+    }
+
+    .copiable {
+      cursor: pointer;
+      position: relative;
+    }
+
+    .copiable:hover::after {
+      content: 'Click to copy';
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.625rem;
+      color: var(--text-muted);
+      background: var(--bg-tertiary);
+      padding: 0.25rem 0.5rem;
+      border-radius: 3px;
+    }
+
+    .symbolic-result {
+      font-family: var(--font-sans);
+      background: var(--bg-secondary);
+      padding: 0.75rem 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      word-break: break-all;
+    }
+
+    .latex-render {
+      background: var(--bg-secondary);
+      padding: 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      text-align: center;
+      color: var(--text-primary);
+      font-size: 1.1rem;
+      min-height: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .latex-render .katex {
+      color: var(--accent, var(--text-primary));
+      font-size: 1.25em;
+    }
+
+    /* Mode toggle */
+    .mode-toggle {
+      display: flex;
+      gap: 0;
+      margin-bottom: 1rem;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .mode-toggle button {
+      flex: 1;
+      padding: 0.5rem 1rem;
+      border: none;
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .mode-toggle button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .mode-toggle button:not(.active):hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    /* Matrix table */
+    .matrix-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      margin-top: 0.5rem;
+    }
+
+    .matrix-table th,
+    .matrix-table td {
+      padding: 0.4rem 0.5rem;
+      text-align: center;
+      border: 1px solid var(--border);
+      min-width: 3rem;
+    }
+
+    .matrix-table th {
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 0.75rem;
+    }
+
+    .matrix-table td {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+    }
+
+    .matrix-table .row-label {
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      font-weight: 500;
+      font-size: 0.75rem;
+    }
+
+    .matrix-table .zero-cell {
+      color: var(--text-muted);
+      opacity: 0.5;
+    }
+
+    .matrix-table .katex {
+      font-size: 0.9em;
+    }
+
+    .matrix-scroll {
+      overflow-x: auto;
+      max-width: 100%;
+    }
+
+    @media (max-width: 480px) {
+      .qn-grid {
+        gap: 0.4rem;
+      }
+      .stepper-btn {
+        width: 1.5rem;
+        font-size: 1rem;
+      }
+      .stepper .form-input {
+        padding: 0.4rem 0.15rem;
+        font-size: 0.85rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="../index.html" class="back-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back to Tools
+        </a>
+        <a href="../index.html" class="logo">
+          <div class="logo-icon">⚛</div>
+          <span>Partial Wave Analysis Tools</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Calculator Page -->
+  <main class="calc-page">
+    <div class="container">
+      <!-- Page Header -->
+      <div class="calc-header">
+        <h1 class="calc-title">Wigner d-Matrix Calculator</h1>
+        <p class="calc-subtitle">
+          Compute Wigner small d-matrix elements d<sup>j</sup><sub>m₁,m₂</sub>(β) with exact symbolic computation
+        </p>
+      </div>
+
+      <!-- Main Grid -->
+      <div class="calc-grid">
+        <!-- Left Column: Input & Results -->
+        <div>
+          <!-- Input Card -->
+          <div class="calc-card">
+            <div class="calc-card-header">
+              <span class="calc-card-icon">🔢</span>
+              <h3 class="calc-card-title">Parameters</h3>
+            </div>
+            <div class="calc-card-body">
+              <!-- Mode toggle -->
+              <div class="mode-toggle" id="mode-toggle">
+                <button type="button" class="active" data-mode="single">Single Element</button>
+                <button type="button" data-mode="matrix">Full Matrix</button>
+              </div>
+
+              <form id="wigner-form">
+                <div class="input-section">
+                  <div class="input-section-title">d<sup>j</sup><sub>m₁,m₂</sub>(β)</div>
+                  <div class="qn-grid">
+                    <div class="form-group">
+                      <label class="form-label" for="j">j</label>
+                      <div class="stepper" data-target="j">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease j">−</button>
+                        <input type="text" id="j" class="form-input" placeholder="1/2" value="1/2" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase j">+</button>
+                      </div>
+                    </div>
+                    <div class="form-group" id="m1-group">
+                      <label class="form-label" for="m1">m₁</label>
+                      <div class="stepper" data-target="m1">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease m₁">−</button>
+                        <input type="text" id="m1" class="form-input" placeholder="1/2" value="1/2" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase m₁">+</button>
+                      </div>
+                    </div>
+                    <div class="form-group" id="m2-group">
+                      <label class="form-label" for="m2">m₂</label>
+                      <div class="stepper" data-target="m2">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease m₂">−</button>
+                        <input type="text" id="m2" class="form-input" placeholder="-1/2" value="-1/2" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase m₂">+</button>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="form-group" style="margin-bottom: 0.75rem;">
+                    <label class="form-label" for="beta">β (angle)</label>
+                    <input type="text" id="beta" class="form-input" placeholder="pi/2 (leave empty for symbolic)" style="max-width: 100%;">
+                  </div>
+                  <p class="form-hint" style="margin-top:0.25rem">
+                    Accepts integers, half-integers (e.g. <code>3/2</code>), or decimals.
+                    β accepts expressions like <code>pi/2</code>, <code>pi/4</code>, or numeric values.
+                    Leave β empty for symbolic form.
+                    Rules: <code>j ≥ 0</code>, <code>|m| ≤ j</code>.
+                  </p>
+                </div>
+
+                <div class="btn-group">
+                  <button type="submit" class="btn btn-primary" id="calculate-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M12 6v6l4 2"></path>
+                    </svg>
+                    Calculate
+                  </button>
+                  <button type="button" class="btn btn-secondary" id="clear-btn">
+                    Clear
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Examples Section -->
+          <div class="examples-section">
+            <h4 class="examples-title">Try Examples:</h4>
+            <div class="examples-grid">
+              <button type="button" class="example-btn" data-example='{"j":"1/2","m1":"1/2","m2":"1/2","beta":"","mode":"single"}'>
+                d<sup>½</sup><sub>½,½</sub>(β)
+              </button>
+              <button type="button" class="example-btn" data-example='{"j":"1/2","m1":"1/2","m2":"-1/2","beta":"pi","mode":"single"}'>
+                d<sup>½</sup><sub>½,−½</sub>(π)
+              </button>
+              <button type="button" class="example-btn" data-example='{"j":"1","m1":"0","m2":"0","beta":"","mode":"single"}'>
+                d<sup>1</sup><sub>0,0</sub>(β)
+              </button>
+              <button type="button" class="example-btn" data-example='{"j":"1","m1":"1","m2":"0","beta":"pi/2","mode":"single"}'>
+                d<sup>1</sup><sub>1,0</sub>(π/2)
+              </button>
+              <button type="button" class="example-btn" data-example='{"j":"1","m1":"","m2":"","beta":"pi/4","mode":"matrix"}'>
+                d<sup>1</sup>(π/4) matrix
+              </button>
+              <button type="button" class="example-btn" data-example='{"j":"3/2","m1":"","m2":"","beta":"","mode":"matrix"}'>
+                d<sup>³⁄₂</sup>(β) matrix
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Results & Formula -->
+        <div>
+          <!-- Results Panel -->
+          <div class="results-panel" id="results-panel">
+            <div class="results-header">
+              <div class="results-status">
+                <span class="status-indicator" id="status-indicator"></span>
+                <span id="status-text">Enter parameters and click Calculate</span>
+              </div>
+            </div>
+            <div class="results-body" id="results-body">
+              <p style="color: var(--text-muted); font-size: 0.875rem;">
+                Results will appear here after calculation.
+              </p>
+            </div>
+          </div>
+
+          <!-- Formula Card -->
+          <div class="formula-section">
+            <div class="formula-card">
+              <h4 class="formula-title">Wigner d-Function Formula</h4>
+              <div class="formula-content">d<sup>j</sup><sub>m₁,m₂</sub>(β) = Σ<sub>l=0</sub><sup>2j</sup> w<sub>l</sub><sup>(j,m₁,m₂)</sup> sin<sup>l</sup>(β/2) cos<sup>2j−l</sup>(β/2)
+
+where the weight w<sub>l</sub><sup>(j,m₁,m₂)</sup> is:
+
+w<sub>l</sub> = (−1)<sup>m₁−m₂+k</sup> · √((j+m₁)!(j−m₁)!(j+m₂)!(j−m₂)!) / ((j−m₁−k)!(j+m₂−k)!(m₁−m₂+k)!k!)
+
+with k = (l + m₂ − m₁)/2, and k ∈ [max(0, m₂−m₁), min(j−m₁, j+m₂)].
+
+Otherwise w<sub>l</sub> = 0.</div>
+              <p class="formula-note">
+                Symbolic computation powered by <a href="http://algebrite.org/" target="_blank" rel="noopener" style="color: var(--accent);">Algebrite</a> —
+                a pure JavaScript computer algebra system.
+              </p>
+            </div>
+          </div>
+
+          <!-- Properties -->
+          <div class="formula-section" style="margin-top: 1rem;">
+            <div class="formula-card">
+              <h4 class="formula-title">Properties</h4>
+              <div class="formula-content" style="font-size: 0.8125rem;">
+• <strong>Symmetry:</strong> d<sup>j</sup><sub>m₁,m₂</sub>(β) = (−1)<sup>m₁−m₂</sup> d<sup>j</sup><sub>m₂,m₁</sub>(β)
+• <strong>Parity:</strong> d<sup>j</sup><sub>m₁,m₂</sub>(−β) = d<sup>j</sup><sub>m₂,m₁</sub>(β)
+• <strong>Orthogonality:</strong> Σ<sub>m</sub> d<sup>j</sup><sub>m,m'</sub>(β) d<sup>j</sup><sub>m,m''</sub>(β) = δ<sub>m',m''</sub>
+• <strong>Special case β=0:</strong> d<sup>j</sup><sub>m₁,m₂</sub>(0) = δ<sub>m₁,m₂</sub>
+• <strong>Special case β=π:</strong> d<sup>j</sup><sub>m₁,m₂</sub>(π) = (−1)<sup>j−m₁</sup> δ<sub>m₁,−m₂</sub></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <p>
+        <a href="../index.html" class="footer-link">← Back to Tools</a>
+      </p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="../assets/vendor/algebrite.bundle-for-browser.js"></script>
+  <script defer src="../assets/vendor/katex/katex.min.js"></script>
+  <script src="../assets/js/wigner-d.js"></script>
+  <script src="../assets/js/main.js"></script>
+  <script>
+    // Check if Algebrite loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      if (typeof Algebrite === 'undefined') {
+        console.error('Algebrite library failed to load');
+        var resultsBody = document.getElementById('results-body');
+        resultsBody.innerHTML = '<div class="result-error"><strong>⚠️ Library Error</strong><br>Algebrite library failed to load — calculator unavailable.<br>Please ensure you are accessing this page via a web server or GitHub Pages.</div>';
+        document.getElementById('status-indicator').className = 'status-indicator error';
+        document.getElementById('status-text').textContent = 'Library Load Error';
+        document.getElementById('calculate-btn').disabled = true;
+      }
+    });
+
+    // DOM Elements
+    var form = document.getElementById('wigner-form');
+    var resultsBody = document.getElementById('results-body');
+    var statusIndicator = document.getElementById('status-indicator');
+    var statusText = document.getElementById('status-text');
+    var clearBtn = document.getElementById('clear-btn');
+    var exampleBtns = document.querySelectorAll('.example-btn');
+    var modeToggle = document.getElementById('mode-toggle');
+
+    var inputs = {
+      j: document.getElementById('j'),
+      m1: document.getElementById('m1'),
+      m2: document.getElementById('m2'),
+      beta: document.getElementById('beta')
+    };
+
+    var currentMode = 'single';
+
+    // Mode toggle
+    modeToggle.querySelectorAll('button').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        modeToggle.querySelectorAll('button').forEach(function(b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        currentMode = btn.dataset.mode;
+
+        var m1Group = document.getElementById('m1-group');
+        var m2Group = document.getElementById('m2-group');
+        if (currentMode === 'matrix') {
+          m1Group.style.display = 'none';
+          m2Group.style.display = 'none';
+        } else {
+          m1Group.style.display = '';
+          m2Group.style.display = '';
+        }
+      });
+    });
+
+    // Example buttons
+    exampleBtns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var example = JSON.parse(btn.dataset.example);
+        inputs.j.value = example.j;
+        inputs.m1.value = example.m1 || '';
+        inputs.m2.value = example.m2 || '';
+        inputs.beta.value = example.beta || '';
+
+        if (example.mode) {
+          modeToggle.querySelectorAll('button').forEach(function(b) {
+            b.classList.remove('active');
+            if (b.dataset.mode === example.mode) b.classList.add('active');
+          });
+          currentMode = example.mode;
+          document.getElementById('m1-group').style.display = (currentMode === 'matrix') ? 'none' : '';
+          document.getElementById('m2-group').style.display = (currentMode === 'matrix') ? 'none' : '';
+        }
+
+        document.getElementById('calculate-btn').focus();
+      });
+    });
+
+    // Clear button
+    clearBtn.addEventListener('click', function() {
+      form.reset();
+      inputs.j.value = '1/2';
+      inputs.m1.value = '1/2';
+      inputs.m2.value = '-1/2';
+      clearResults();
+      inputs.j.focus();
+    });
+
+    // Stepper buttons
+    (function setupSteppers() {
+      var J_IDS = { 'j': true };
+      var M_IDS = { 'm1': true, 'm2': true };
+
+      function formatVal(v) {
+        var twice = Math.round(v * 2);
+        if (twice % 2 === 0) return String(twice / 2);
+        var sign = twice < 0 ? '-' : '';
+        return sign + Math.abs(twice) + '/2';
+      }
+
+      function parseVal(str) {
+        var s = String(str || '').trim();
+        if (s === '' || s === '-') return 0;
+        if (s.includes('/')) {
+          var parts = s.split('/');
+          var n = parseFloat(parts[0]), d = parseFloat(parts[1]);
+          if (!isNaN(n) && !isNaN(d) && d !== 0) return n / d;
+          return NaN;
+        }
+        return parseFloat(s);
+      }
+
+      document.querySelectorAll('.stepper').forEach(function(wrap) {
+        var id = wrap.dataset.target;
+        var stepSize = M_IDS[id] ? 1 : 0.5;
+        var input = wrap.querySelector('input');
+        wrap.querySelectorAll('.stepper-btn').forEach(function(btn) {
+          var delta = parseFloat(btn.dataset.step) * stepSize;
+          btn.addEventListener('click', function() {
+            var current = parseVal(input.value);
+            var next = isNaN(current) ? 0 : current + delta;
+            if (J_IDS[id] && next < 0) next = 0;
+            input.value = formatVal(next);
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+          });
+        });
+      });
+    })();
+
+    // Form submission
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      calculate();
+    });
+
+    function calculate() {
+      if (typeof Algebrite === 'undefined') {
+        showError('Algebrite library is not loaded — calculator unavailable.');
+        return;
+      }
+
+      var j = inputs.j.value.trim();
+      var beta = inputs.beta.value.trim();
+
+      if (!j) {
+        showError('Please enter j.');
+        return;
+      }
+
+      statusIndicator.className = 'status-indicator';
+      statusText.textContent = 'Computing...';
+      resultsBody.innerHTML = '<p style="color: var(--text-muted);" class="loading">Computing symbolic result...</p>';
+
+      setTimeout(function() {
+        try {
+          if (currentMode === 'matrix') {
+            var result = computeWignerDMatrix(j, beta);
+            if (result.error) {
+              showError(result.error);
+              return;
+            }
+            showMatrixResults(result, j, beta);
+          } else {
+            var m1 = inputs.m1.value.trim();
+            var m2 = inputs.m2.value.trim();
+            if (!m1 || !m2) {
+              showError('Please enter m₁ and m₂.');
+              return;
+            }
+            var result = computeWignerD(j, m1, m2, beta);
+            if (result.error) {
+              showError(result.error);
+              return;
+            }
+            showSingleResult(result, j, m1, m2, beta);
+          }
+        } catch (e) {
+          showError('Computation error: ' + (e.message || e));
+        }
+      }, 10);
+    }
+
+    function qnToLatex(s) {
+      s = String(s).trim();
+      if (s.includes('/')) {
+        var parts = s.split('/');
+        var sign = parts[0].trim().startsWith('-') ? '-' : '';
+        var num = parts[0].replace(/^-/, '').trim();
+        return sign + '\\tfrac{' + num + '}{' + parts[1].trim() + '}';
+      }
+      return s;
+    }
+
+    function renderLatex(el, tex, displayMode) {
+      if (!el) return;
+      if (typeof katex === 'undefined') {
+        el.textContent = tex;
+        return;
+      }
+      try {
+        katex.render(tex, el, { displayMode: displayMode !== false, throwOnError: false, output: 'html' });
+      } catch (e) {
+        el.textContent = tex;
+      }
+    }
+
+    function showSingleResult(result, j, m1, m2, beta) {
+      if (result.decimal === 0 && result.symbolic === '0') {
+        statusIndicator.className = 'status-indicator success';
+        statusText.textContent = 'Result: 0';
+        resultsBody.innerHTML = '<div class="result-item"><div class="result-label">Wigner d-Function Element</div><div class="latex-render" id="latex-zero"></div></div><div class="result-warning" style="margin-top: 1rem;"><strong>Note:</strong> This element is zero.</div>';
+        renderLatex(document.getElementById('latex-zero'), 'd^{' + qnToLatex(j) + '}_{' + qnToLatex(m1) + ',' + qnToLatex(m2) + '}(' + (beta || '\\beta') + ') = 0');
+        return;
+      }
+
+      statusIndicator.className = 'status-indicator success';
+      statusText.textContent = 'Calculation Complete';
+
+      var decimalStr = result.decimal.toPrecision(12);
+      var symbolicStr = result.symbolic || '0';
+      var latexStr = (result.latex && result.latex.length) ? result.latex : symbolicStr;
+
+      var betaDisplay = beta || '\\beta';
+      var html = '<div class="result-item"><div class="result-label">Rendered</div><div class="latex-render" id="latex-main"></div></div>' +
+        '<div class="result-item"><div class="result-label">Symbolic Form</div><div class="symbolic-result copiable" onclick="copyValue(this)" title="Click to copy">' + symbolicStr + '</div></div>' +
+        '<div class="result-item"><div class="result-label">Decimal Value</div><div class="result-value small copiable" onclick="copyValue(this)" title="Click to copy">' + decimalStr + '</div></div>';
+
+      resultsBody.innerHTML = html;
+
+      var mainTex = 'd^{' + qnToLatex(j) + '}_{' + qnToLatex(m1) + ',' + qnToLatex(m2) + '}(' + betaDisplay + ') \\;=\\; ' + latexStr;
+      renderLatex(document.getElementById('latex-main'), mainTex);
+    }
+
+    function showMatrixResults(result, j, beta) {
+      statusIndicator.className = 'status-indicator success';
+      statusText.textContent = 'Calculation Complete';
+
+      var mValues = result.mValues;
+      var matrix = result.matrix;
+      var betaDisplay = beta || '\\beta';
+
+      var html = '<div class="result-item"><div class="result-label">Matrix d<sup>' + qnToLatex(j) + '</sup>(' + betaDisplay + ')</div>';
+
+      html += '<div class="matrix-scroll"><table class="matrix-table"><thead><tr><th>m₁ \\ m₂</th>';
+      for (var c = 0; c < mValues.length; c++) {
+        html += '<th>' + qnToLatex(String(mValues[c])) + '</th>';
+      }
+      html += '</tr></thead><tbody>';
+
+      for (var r = 0; r < mValues.length; r++) {
+        html += '<tr><td class="row-label">' + qnToLatex(String(mValues[r])) + '</td>';
+        for (var c = 0; c < mValues.length; c++) {
+          var cell = matrix[r][c];
+          if (cell.error) {
+            html += '<td class="zero-cell">—</td>';
+          } else if (cell.decimal === 0 && cell.symbolic === '0') {
+            html += '<td class="zero-cell">0</td>';
+          } else {
+            var cellLatex = (cell.latex && cell.latex.length) ? cell.latex : cell.symbolic;
+            html += '<td><span class="latex-inline" data-latex="' + cellLatex.replace(/"/g, '&quot;') + '"></span></td>';
+          }
+        }
+        html += '</tr>';
+      }
+      html += '</tbody></table></div></div>';
+
+      resultsBody.innerHTML = html;
+
+      // Render inline LaTeX in matrix cells
+      if (typeof katex !== 'undefined') {
+        var spans = resultsBody.querySelectorAll('.latex-inline');
+        for (var i = 0; i < spans.length; i++) {
+          var tex = spans[i].dataset.latex;
+          try {
+            katex.render(tex, spans[i], { displayMode: false, throwOnError: false, output: 'html' });
+          } catch (e) {
+            spans[i].textContent = tex;
+          }
+        }
+      }
+    }
+
+    function showError(msg) {
+      statusIndicator.className = 'status-indicator error';
+      statusText.textContent = 'Error';
+      resultsBody.innerHTML = '<div class="result-error"><strong>⚠️ Error</strong><br>' + msg + '</div>';
+    }
+
+    function clearResults() {
+      statusIndicator.className = 'status-indicator';
+      statusText.textContent = 'Enter parameters and click Calculate';
+      resultsBody.innerHTML = '<p style="color: var(--text-muted); font-size: 0.875rem;">Results will appear here after calculation.</p>';
+    }
+
+    function copyValue(element) {
+      var text = element.textContent;
+      copyToClipboard(text).then(function(success) {
+        if (success) {
+          showNotification('Copied to clipboard!', 'success');
+        } else {
+          showNotification('Failed to copy', 'error');
+        }
+      });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        calculate();
+      }
+    });
+  </script>
+</body>
+</html>

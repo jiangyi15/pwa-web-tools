@@ -91,6 +91,22 @@
             </svg>
           </span>
         </a>
+
+        <!-- Wigner d-Matrix Calculator -->
+        <a href="tools/wigner-d-calculator.html" class="tool-card">
+          <div class="tool-icon">d<sup>j</sup></div>
+          <h3 class="tool-title">Wigner d-Matrix Calculator</h3>
+          <p class="tool-description">
+            Compute Wigner small d-matrix elements d<sup>j</sup><sub>m₁,m₂</sub>(β) using exact symbolic computation.
+            Supports single elements and full matrix display with half-integer quantum numbers.
+          </p>
+          <span class="tool-cta">
+            Launch Calculator
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </span>
+        </a>
       </div>
     </div>
   </section>
@@ -105,10 +121,11 @@
         </div>
         <div class="calc-card-body">
           <p style="color: var(--text-secondary); line-height: 1.8;">
-            This toolkit provides exact calculations for quantum angular momentum coupling coefficients. 
+            This toolkit provides exact calculations for quantum angular momentum coupling coefficients and rotation matrices. 
             The <strong style="color: var(--text-primary);">Clebsch-Gordan coefficients</strong> are fundamental 
             in quantum mechanics, appearing in the addition of angular momenta, selection rules for transitions, 
-            and the transformation between coupled and uncoupled basis states.
+            and the transformation between coupled and uncoupled basis states. The <strong style="color: var(--text-primary);">Wigner d-matrix</strong> 
+            describes rotations of angular momentum eigenstates.
           </p>
           <p style="color: var(--text-secondary); line-height: 1.8; margin-top: 1rem;">
             All calculations use <strong style="color: var(--text-primary);">exact rational arithmetic</strong> 
@@ -116,13 +133,14 @@
             and in symbolic form (√p/q) when possible.
           </p>
           <div style="margin-top: 1.5rem; padding: 1rem; background: var(--bg-tertiary); border-radius: var(--radius-sm); font-family: var(--font-sans); font-size: 0.8125rem; color: var(--text-muted);">
-            <strong style="color: var(--text-secondary);">Features:</strong>
-            <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
-              <li>Half-integer quantum numbers (½, ³⁄₂, etc.)</li>
-              <li>Selection rule validation</li>
-              <li>Exact symbolic results</li>
-              <li>Works offline — no server required</li>
-            </ul>
+<strong style="color: var(--text-secondary);">Features:</strong>
+              <ul style="margin-top: 0.5rem; padding-left: 1.5rem;">
+                <li>Half-integer quantum numbers (½, ³⁄₂, etc.)</li>
+                <li>Selection rule validation</li>
+                <li>Exact symbolic results</li>
+                <li>Full matrix display for Wigner d-function</li>
+                <li>Works offline — no server required</li>
+              </ul>
           </div>
         </div>
       </div>
