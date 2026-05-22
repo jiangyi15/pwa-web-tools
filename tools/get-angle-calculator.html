@@ -554,29 +554,42 @@ Selection rules:
     }
     
     function complexToLatex(c) {
-      var r = c.real;
-      var i = c.imag;
+      var realPart = c.real;
+      var imagPart = c.imag;
       
+      // Simplify and convert real part to LaTeX
       try {
-        r = Algebrite.run('printlatex(' + r + ')').trim();
-        r = r.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
-        r = r.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
+        realPart = Algebrite.run('simplify(' + realPart + ')').trim();
+        realPart = Algebrite.run('printlatex(' + realPart + ')').trim();
+        realPart = realPart.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
+        realPart = realPart.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
       } catch(e) {}
       
-      // Check if imag is 0
-      if (i === '0' || i === '') {
-        return r;
+      // Check if imag is zero
+      if (imagPart === '0' || imagPart === '') {
+        return realPart;
       }
       
+      // Simplify and convert imag part to LaTeX
       try {
-        i = Algebrite.run('printlatex(' + i + ')').trim();
-        i = i.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
-        i = i.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
+        imagPart = Algebrite.run('simplify(' + imagPart + ')').trim();
+        imagPart = Algebrite.run('printlatex(' + imagPart + ')').trim();
+        imagPart = imagPart.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
+        imagPart = imagPart.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
       } catch(e) {}
       
-      if (i === '0') return r;
-      if (r === '0' || r === '') return i + '\\,i';
-      return '(' + r + ' + ' + i + '\\,i)';
+      // Check again if imag became 0 after simplification
+      if (imagPart === '0' || imagPart === '') {
+        return realPart;
+      }
+      
+      // Purely imaginary
+      if (realPart === '0' || realPart === '') {
+        return imagPart + '\\,i';
+      }
+      
+      // Complex: real + i*imag
+      return '(' + realPart + ' + ' + imagPart + '\\,i)';
     }
 
     function showError(msg) {
