@@ -610,35 +610,98 @@ function resultToLatex(result) {
 // ============================================================================
 
 // --- Structured term constructors ---
+// Coefficients are ALGEBRITE STRINGS, never floats.
 
-function _st(coeff, thetaIdx, sinPow, cosPow, phiIdx, phiFunc, mVal) {
-  // phiFunc: "cos"|"sin"|"1" ; if "1", no phi dependence
-  // represents: coeff * sin^{sinPow}(θ/2) * cos^{cosPow}(θ/2) * {phiFunc}(mVal*φ)
+function _st(coeffStr, thetaIdx, sinPow, cosPow, phiIdx, phiFunc, mVal) {
   return {
-    c: coeff,
+    s: coeffStr,         // Algebrite string like "sqrt(3)/3" or "-1/2" or "1"
     ti: thetaIdx, sp: sinPow, cp: cosPow,
     pi: phiIdx, pf: phiFunc || '1', pm: mVal || 0,
-    im: false   // isImag: contributes to imaginary part
+    im: false
   };
 }
 
-function _sti(coeff, thetaIdx, sinPow, cosPow, phiIdx, phiFunc, mVal) {
-  var t = _st(coeff, thetaIdx, sinPow, cosPow, phiIdx, phiFunc, mVal);
+function _sti(coeffStr, thetaIdx, sinPow, cosPow, phiIdx, phiFunc, mVal) {
+  var t = _st(coeffStr, thetaIdx, sinPow, cosPow, phiIdx, phiFunc, mVal);
   t.im = true;
   return t;
 }
 
-// --- Collect Wigner-d weights for structured computation ---
+// --- Exact Wigner-d weight as Algebrite string ---
+// Returns array of {weightStr, sinPow, cosPow} using exact symbolic expressions.
 
-/**
- * Get all raw Wigner-d terms for a given (J, m, mp).
- * Returns [{weight, sinPow, cosPow}]
- * Uses the factorial-based weight from wigner-d.js.
- */
-function _getWignerDRaw(J, m, mp) {
-  var wd = getWignerDTerms(J, m, mp);
-  return (wd && wd.terms) ? wd.terms : [];
+function _getExactWignerDWeights(J, m1, m2) {
+  var twoJ = Math.round(2 * J);
+  var jpm1 = Math.round(J + m1), jmm1 = Math.round(J - m1);
+  var jpm2 = Math.round(J + m2), jmm2 = Math.round(J - m2);
+  
+  // Precompute factorials
+  var maxN = Math.max(jpm1, jmm1, jpm2, jmm2, twoJ + 2, 10);
+  var facts = [1];
+  for (var i = 1; i <= maxN; i++) facts[i] = facts[i-1] * i;
+  
+  // Numerator under sqrt: (j+m1)!(j-m1)!(j+m2)!(j-m2)!
+  var numNum = 1;
+  for (var i = 1; i <= jpm1; i++) numNum *= i;
+  for (var i = 1; i <= jmm1; i++) numNum *= i;
+  for (var i = 1; i <= jpm2; i++) numNum *= i;
+  for (var i = 1; i <= jmm2; i++) numNum *= i;
+  
+  var weights = [];
+  
+  for (var l = 0; l <= twoJ; l++) {
+    var k = (l + m2 - m1) / 2;
+    if (Math.abs(k - Math.round(k)) > 1e-10) continue;
+    k = Math.round(k);
+    if (k < Math.max(0, m2 - m1)) continue;
+    if (k > Math.min(jmm1, jpm2)) continue;
+    
+    var sign = ((Math.round(m1 - m2) + k) % 2 === 0) ? '' : '-';
+    
+    // Denominator product
+    var denom = 1;
+    if (jmm1 - k >= 0) { for (var i = 1; i <= jmm1-k; i++) denom *= i; }
+    if (jpm2 - k >= 0) { for (var i = 1; i <= jpm2-k; i++) denom *= i; }
+    if (Math.round(m1-m2)+k >= 0) { for (var i = 1; i <= Math.round(m1-m2)+k; i++) denom *= i; }
+    if (k >= 0) { for (var i = 1; i <= k; i++) denom *= i; }
+    
+    // Extract perfect squares from numNum
+    var p = 1, r = numNum;
+    for (var i = 2; i * i <= r; i++) {
+      while (r % (i * i) === 0) { r /= (i * i); p *= i; }
+    }
+    
+    // Reduce p/denom
+    var g = _gcd(p, denom); p /= g; denom /= g;
+    
+    // Build weight string
+    var wStr;
+    if (r === 1 && p === 1 && denom === 1) wStr = '1';
+    else if (r === 1 && denom === 1) wStr = String(p);
+    else if (p === 1 && r === 1) wStr = '1/' + denom;
+    else if (p === 1 && denom === 1) wStr = 'sqrt(' + r + ')';
+    else if (denom === 1 && r === 1) wStr = String(p);
+    else if (p === 1) wStr = 'sqrt(' + r + ')/' + denom;
+    else if (denom === 1) wStr = p + '*sqrt(' + r + ')';
+    else if (r === 1) wStr = p + '/' + denom;
+    else wStr = p + '*sqrt(' + r + ')/' + denom;
+    
+    if (wStr !== '1' && wStr !== '0') wStr = sign + wStr;
+    else if (wStr === '1') wStr = sign + '1';
+    
+    weights.push({ weightStr: wStr, sinPow: l, cosPow: twoJ - l });
+  }
+  
+  return weights;
 }
+
+var _gcd = function(a, b) {
+  a = Math.abs(a); b = Math.abs(b);
+  while (b) { var t = b; b = a % b; a = t; }
+  return a;
+};
+
+// --- Collect Wigner-d weights for structured computation ---
 
 // --- Build structured amplitude for one vertex ---
 
@@ -696,26 +759,28 @@ function _getOneHelicityStruct(Ja, Jb, Jc, la, lb, lc, thetaIdx, phiIdx, l, s) {
                       formatSpin(toSpin(Ja)), formatSpin(toSpin(delta)));
   if (cg2.error || (Math.abs(cg2.decimal) < 1e-14 && cg2.symbolic === '0')) return null;
   
-  var coeff = Math.sqrt((2 * l + 1) / (Math.round(2 * Ja) + 1));
-  var cgProduct = coeff * cg1.decimal * cg2.decimal;
+  // Build coefficient string: sqrt((2l+1)/(2Ja+1)) * cg1 * cg2
+  var sqrtPart = 'sqrt(' + (2*l + 1) + '/' + (Math.round(2*Ja) + 1) + ')';
+  var coeffStr = sqrtPart + '*(' + cg1.symbolic + ')*(' + cg2.symbolic + ')';
   
-  var wdTerms = _getWignerDRaw(Ja, la, delta);
-  if (wdTerms.length === 0) return null;
+  // Get exact Wigner-d weight strings
+  var wdWeights = _getExactWignerDWeights(Ja, la, delta);
+  if (wdWeights.length === 0) return null;
   
   var terms = [];
-  for (var i = 0; i < wdTerms.length; i++) {
-    var wt = wdTerms[i];
-    var tc = cgProduct * wt.weight;
+  for (var i = 0; i < wdWeights.length; i++) {
+    var wt = wdWeights[i];
+    var termCoeffStr = coeffStr + '*(' + wt.weightStr + ')';
     
     if (Math.abs(la) < 1e-10) {
-      terms.push(_st(tc, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, '1', 0));
+      terms.push(_st(termCoeffStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, '1', 0));
     } else {
-      // cos(m*φ) = cos(|m|*φ) → use abs value for phi argument
-      // sin(m*φ) = sign(m) * sin(|m|*φ) → absorb sign into coefficient
       var absLA = Math.abs(la);
       var sinSign = la < 0 ? -1 : 1;
-      terms.push(_st(tc, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, 'cos', absLA));
-      terms.push(_sti(tc * sinSign, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, 'sin', absLA));
+      // For cos: coefficient stays as-is. For sin: multiply by sinSign
+      terms.push(_st(termCoeffStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, 'cos', absLA));
+      var sinStr = sinSign < 0 ? '-(' + termCoeffStr + ')' : termCoeffStr;
+      terms.push(_sti(sinStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, 'sin', absLA));
     }
   }
   return terms;
@@ -858,23 +923,26 @@ function _twoWayStructuredMul(termsA, termsB) {
 }
 
 function _mulTwo(ta, tb) {
-  var cc = ta.c * tb.c;
   var theta = _mergeThetaPair(ta, tb);
   var phi = _mergePhiPair(ta, tb);
   
   var result = [];
   // (ar + i*ai)*(br + i*bi) = (ar*br - ai*bi) + i*(ar*bi + ai*br)
-  if (!ta.im && !tb.im) result.push({ c: cc, _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: false });
-  if (ta.im && tb.im)   result.push({ c: -cc, _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: false });
-  if (!ta.im && tb.im)  result.push({ c: cc, _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: true });
-  if (ta.im && !tb.im)  result.push({ c: cc, _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: true });
+  // Coefficient: concatenate as Algebrite product strings
   
-  // Filter near-zero
-  var filtered = [];
-  for (var i = 0; i < result.length; i++) {
-    if (Math.abs(result[i].c) > 1e-14) filtered.push(result[i]);
+  if (!ta.im && !tb.im) {
+    result.push({ s: '(' + ta.s + ')*(' + tb.s + ')', _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: false });
   }
-  return filtered;
+  if (ta.im && tb.im) {
+    result.push({ s: '-(' + ta.s + ')*(' + tb.s + ')', _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: false });
+  }
+  if (!ta.im && tb.im) {
+    result.push({ s: '(' + ta.s + ')*(' + tb.s + ')', _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: true });
+  }
+  if (ta.im && !tb.im) {
+    result.push({ s: '(' + ta.s + ')*(' + tb.s + ')', _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: true });
+  }
+  return result;
 }
 
 function _mulThree(ta, tb, tc) {
@@ -968,11 +1036,10 @@ function _mergePhiPair(ta, tb) {
  * where func is "cos"/"sin"/"1" and k is multiplier of θ/2.
  */
 function _expandStructTerm(term) {
-  // Normalize: convert any original-format fields to batch
   var tbatch = _collectTheta(term);
   var pbatch = _collectPhi(term);
   
-  var expanded = [{ c: term.c, thetaBasis: [], phiBasis: pbatch, im: term.im }];
+  var expanded = [{ s: term.s, thetaBasis: [], phiBasis: pbatch, im: term.im }];
   
   for (var j = 0; j < tbatch.length; j++) {
     var tt = tbatch[j];
@@ -983,13 +1050,19 @@ function _expandStructTerm(term) {
     for (var e = 0; e < expanded.length; e++) {
       for (var h = 0; h < halfExp.length; h++) {
         var he = halfExp[h];
-        if (Math.abs(he.coeff) < 1e-14) continue;
+        if (he.s === '0') continue;
         var base = expanded[e];
         var nb = base.thetaBasis.slice();
         if (he.func !== '1') {
           nb.push({ idx: tt.idx, func: he.func, k: he.k });
         }
-        newList.push({ c: base.c * he.coeff, thetaBasis: nb, phiBasis: base.phiBasis, im: base.im });
+        // String coefficient multiplication
+        var newS;
+        if (he.s === '1') newS = base.s;
+        else if (he.s === '-1') newS = '-(' + base.s + ')';
+        else newS = '(' + base.s + ')*(' + he.s + ')';
+        
+        newList.push({ s: newS, thetaBasis: nb, phiBasis: base.phiBasis, im: base.im });
       }
     }
     expanded = newList;
@@ -1002,18 +1075,15 @@ function _groupExpandedTerms(expandedList) {
   var groups = {};
   for (var i = 0; i < expandedList.length; i++) {
     var t = expandedList[i];
-    if (Math.abs(t.c) < 1e-14) continue;
-    
     var key = _basisKey(t.thetaBasis) + '|' + _basisKey(t.phiBasis) + '|' + (t.im ? 'I' : 'R');
     if (!groups[key]) {
-      groups[key] = { c: 0, thetaBasis: t.thetaBasis, phiBasis: t.phiBasis, im: t.im };
+      groups[key] = { coeffStrs: [], thetaBasis: t.thetaBasis, phiBasis: t.phiBasis, im: t.im };
     }
-    groups[key].c += t.c;
+    groups[key].coeffStrs.push(t.s);
   }
-  
   var result = [];
   for (var k in groups) {
-    if (Math.abs(groups[k].c) > 1e-10) result.push(groups[k]);
+    result.push(groups[k]);
   }
   return result;
 }
@@ -1026,189 +1096,6 @@ function _basisKey(basis) {
     var f = x.func || x.pf || '';
     return x.idx + f + (x.k || '') + (x.pm || '');
   }).join(',');
-}
-
-// --- Reconstruction to Algebrite/LaTeX string ---
-
-/**
- * Convert a grouped structured term to an Algebrite expression string.
- */
-function _structToExpr(group, thetaNames, phiNames) {
-  // Build the coefficient expression
-  var coeffStr = _coeffToString(group.c);
-  
-  // Build theta factors
-  var thetaFactors = [];
-  for (var i = 0; i < group.thetaBasis.length; i++) {
-    var tb = group.thetaBasis[i];
-    var tname = thetaNames[tb.idx] || ('theta_' + tb.idx);
-    if (tb.func === '1') continue;
-    if (tb.k === 0) continue;
-    
-    if (tb.k === 1) {
-      thetaFactors.push(tb.func + '(' + tname + ')');
-    } else if (tb.k % 2 === 0) {
-      // Whole angle: cos(k*θ/2) = cos((k/2)*θ)
-      var mult = tb.k / 2;
-      thetaFactors.push(tb.func + '(' + (mult === 1 ? '' : mult + '*') + tname + ')');
-    } else {
-      // Half angle: cos/sin(k*θ/2)
-      thetaFactors.push(tb.func + '(' + tb.k + '/2*' + tname + ')');
-    }
-  }
-  
-  // Build phi factors
-  var phiFactors = [];
-  for (var i = 0; i < group.phiBasis.length; i++) {
-    var pb = group.phiBasis[i];
-    var pname = phiNames[pb.idx] || ('phi_' + pb.idx);
-    if (pb.pf === '1' || !pb.pf) continue;
-    if (pb.pm !== 0 && pb.pm !== undefined) {
-      phiFactors.push(pb.pf + '(' + pb.pm + '*' + pname + ')');
-    } else {
-      phiFactors.push(pb.pf + '(' + pname + ')');
-    }
-  }
-  
-  var parts = [];
-  if (coeffStr !== '1' && coeffStr !== '') parts.push(coeffStr);
-  parts = parts.concat(thetaFactors, phiFactors);
-  
-  if (parts.length === 0) parts.push('1');
-  
-  var expr = parts.join('*');
-  if (group.im) expr = expr + '*i';
-  
-  return expr;
-}
-
-function _coeffToString(c) {
-  if (Math.abs(c - Math.round(c)) < 1e-10) {
-    return String(Math.round(c));
-  }
-  // Try to express as rational with sqrt
-  for (var d = 1; d <= 12; d++) {
-    var numer = c * d;
-    if (Math.abs(numer - Math.round(numer)) < 1e-8 && Math.round(numer) !== 0) {
-      if (d === 1) return String(Math.round(numer));
-      return Math.round(numer) + '/' + d;
-    }
-  }
-  // Try sqrt-based
-  for (var sn = 1; sn <= 24; sn++) {
-    var sqrtVal = Math.sqrt(sn);
-    for (var den = 1; den <= 12; den++) {
-      if (Math.abs(c - sqrtVal/den) < 1e-10) return 'sqrt(' + sn + ')/' + den;
-      if (Math.abs(c + sqrtVal/den) < 1e-10) return '-sqrt(' + sn + ')/' + den;
-    }
-  }
-  return String(Number(c.toFixed(6)));
-}
-
-/**
- * Convert a positive number to Algebrite expression string.
- * E.g., 0.5 → '1/2', 0.707... → 'sqrt(2)/2'
- */
-function _numberToAlgebriteStr(absC) {
-  if (Math.abs(absC) < 1e-12) return '0';
-  if (Math.abs(absC - Math.round(absC)) < 1e-10) {
-    return String(Math.round(absC));
-  }
-  // Rational fraction
-  for (var d = 1; d <= 12; d++) {
-    var n = Math.round(absC * d);
-    if (Math.abs(absC - n/d) < 1e-10 && n !== 0) {
-      if (d === 1) return String(n);
-      return '(' + n + '/' + d + ')';
-    }
-  }
-  // sqrt(n)/m
-  for (var sn = 1; sn <= 24; sn++) {
-    var sv = Math.sqrt(sn);
-    for (var den = 1; den <= 12; den++) {
-      if (Math.abs(absC - sv/den) < 1e-10) return 'sqrt(' + sn + ')/' + den;
-    }
-    // n*sqrt(m) form? Probably not needed
-  }
-  return String(Number(absC.toFixed(8)));
-}
-
-// --- Structured-to-LaTeX converter ---
-
-function _structToLatex(group, thetaNames, phiNames) {
-  var coeffStr = _coeffToLatex(group.c);
-  
-  var parts = [];
-  if (coeffStr && coeffStr !== '1') parts.push(coeffStr);
-  
-  for (var i = 0; i < group.thetaBasis.length; i++) {
-    var tb = group.thetaBasis[i];
-    var tname = thetaNames[tb.idx] || ('\\theta_' + tb.idx);
-    if (tb.func === '1' || tb.k === 0) continue;
-    
-    var arg;
-    if (tb.k === 1) {
-      arg = tname;
-    } else if (tb.k % 2 === 0) {
-      var mult = tb.k / 2;
-      arg = (mult === 1 ? '' : mult) + tname;
-    } else {
-      arg = '\\frac{' + tb.k + '}{2}' + tname;
-    }
-    parts.push('\\' + tb.func + '(' + arg + ')');
-  }
-  
-  for (var i = 0; i < group.phiBasis.length; i++) {
-    var pb = group.phiBasis[i];
-    var pname = phiNames[pb.idx] || ('\\phi_' + pb.idx);
-    if (pb.pf === '1' || !pb.pf) continue;
-    if (pb.pm && pb.pm !== 0) {
-      // Include the multiplier: e.g., cos(-1*phi_1) or sin((-1)*phi_1)
-      var sign = pb.pm < 0 ? '-' : '';
-      var absm = Math.abs(pb.pm);
-      var mStr = absm === 1 ? '' : absm;
-      if (sign) pname = sign + mStr + pname;
-      else if (mStr) pname = mStr + pname;
-    }
-    parts.push('\\' + pb.pf + '(' + pname + ')');
-  }
-  
-  if (parts.length === 0) parts.push('1');
-  
-  var latex = parts.join('\\,');
-  if (group.im) latex += '\\,i';
-  return latex;
-}
-
-function _coeffToLatex(c) {
-  if (Math.abs(c) < 1e-10) return '0';
-  if (Math.abs(c - 1) < 1e-10) return '1';
-  if (Math.abs(c + 1) < 1e-10) return '-1';
-  
-  // Try sqrt-based
-  var isNeg = c < 0;
-  var absC = Math.abs(c);
-  
-  for (var sn = 1; sn <= 24; sn++) {
-    var sv = Math.sqrt(sn);
-    for (var den = 1; den <= 12; den++) {
-      if (Math.abs(absC - sv/den) < 1e-10) {
-        var s = (isNeg ? '-' : '') + '\\frac{\\sqrt{' + sn + '}}{' + den + '}';
-        return s;
-      }
-    }
-  }
-  
-  // Rational fraction
-  for (var d = 1; d <= 12; d++) {
-    var n = absC * d;
-    if (Math.abs(n - Math.round(n)) < 1e-8 && Math.round(n) !== 0) {
-      var s = (isNeg ? '-' : '') + '\\frac{' + Math.round(n) + '}{' + d + '}';
-      return s;
-    }
-  }
-  
-  return String(Number(c.toFixed(6)));
 }
 
 // --- TOP-LEVEL: structured formula computation ---
@@ -1269,99 +1156,71 @@ function getAngleFormulaSimplified(decayTree) {
       // Group by basis
       var grouped = _groupExpandedTerms(allExpanded);
       
-      // Split into real and imag parts
-      var realParts = [], imagParts = [];
-      for (var g = 0; g < grouped.length; g++) {
-        var latex = _structToLatex(grouped[g], thetaNames, phiNames);
-        if (grouped[g].im) {
-          imagParts.push((grouped[g].c > 0 ? '+' : '') + latex);
-        } else {
-          realParts.push((grouped[g].c > 0 ? '+' : '') + latex);
-        }
-      }
-      
-      var realStr = realParts.join('');
-      var imagStr = imagParts.join('');
-      
-      // Clean up: remove leading +
-      if (realStr[0] === '+') realStr = realStr.substring(1);
-      if (imagStr[0] === '+') imagStr = imagStr.substring(1);
-      if (!realStr) realStr = '0';
-      if (!imagStr) imagStr = '0';
-      
       // Reconstruct simplified expressions using Algebrite
       try {
-        // Build separate real and imag expressions
-        var realTerms = [], imagTerms = [];
+        var realStrs = [], imagStrs = [];
         
         for (var g = 0; g < grouped.length; g++) {
-          var target = grouped[g].im ? imagTerms : realTerms;
-          var sign = grouped[g].c >= 0 ? '+' : '-';
-          var absCoeff = Math.abs(grouped[g].c);
+          var grp = grouped[g];
           
-          // Build the trig factor product
-          var factors = [];
+          // Build coefficient expression from summed strings
+          var coeffRaw;
+          if (grp.coeffStrs.length === 1) {
+            coeffRaw = grp.coeffStrs[0];
+          } else {
+            coeffRaw = '(' + grp.coeffStrs.join(')+(') + ')';
+          }
+          // Simplify the coefficient
+          var coeffExpr = Algebrite.run('simplify(' + coeffRaw + ')').trim();
+          if (coeffExpr === '0') continue;
           
-          for (var ti = 0; ti < grouped[g].thetaBasis.length; ti++) {
-            var tb = grouped[g].thetaBasis[ti];
+          // Build trig factor product
+          var trigParts = [];
+          
+          for (var ti = 0; ti < grp.thetaBasis.length; ti++) {
+            var tb = grp.thetaBasis[ti];
             if (tb.func === '1' || tb.k === 0) continue;
             var tn = algebriteThetaNames[tb.idx];
-            // k=1: cos/sin(θ/2); k even: cos/sin((k/2)*θ); k odd: cos/sin(k/2*θ)
             var arg;
-            if (tb.k === 1) {
-              arg = tn + '/2';
-            } else if (tb.k % 2 === 0) {
-              var mult = tb.k / 2;
-              arg = (mult === 1 ? '' : mult + '*') + tn;
-            } else {
-              arg = '(' + tb.k + '/2)*' + tn;
-            }
-            factors.push(tb.func + '(' + arg + ')');
+            if (tb.k === 1) { arg = tn + '/2'; }
+            else if (tb.k % 2 === 0) { var m = tb.k/2; arg = (m===1?'':m+'*') + tn; }
+            else { arg = '(' + tb.k + '/2)*' + tn; }
+            trigParts.push(tb.func + '(' + arg + ')');
           }
           
-          for (var pi = 0; pi < grouped[g].phiBasis.length; pi++) {
-            var pb = grouped[g].phiBasis[pi];
+          for (var pi = 0; pi < grp.phiBasis.length; pi++) {
+            var pb = grp.phiBasis[pi];
             var pn = 'phi_' + pb.idx;
-            // pm is always |la|; for pm=1, use plain cos/sin(phi); for pm>1, use cos/sin(pm*phi)
-            if (pb.pm && pb.pm !== 1) {
-              factors.push(pb.pf + '(' + pb.pm + '*' + pn + ')');
-            } else {
-              factors.push(pb.pf + '(' + pn + ')');
-            }
+            if (pb.pm && pb.pm !== 1) { trigParts.push(pb.pf + '(' + pb.pm + '*' + pn + ')'); }
+            else { trigParts.push(pb.pf + '(' + pn + ')'); }
           }
           
-          // Build the coefficient prefix
-          var coeffPrefix;
-          if (Math.abs(absCoeff - 1) < 1e-12) {
-            coeffPrefix = '';
-          } else {
-            coeffPrefix = _numberToAlgebriteStr(absCoeff) + '*';
+          // Build complete term (coefficient already includes all numeric factors)
+          // For imag: exclude *i from individual terms, factor it out later
+          var termExpr = coeffExpr;
+          if (trigParts.length > 0) {
+            termExpr = termExpr + '*' + trigParts.join('*');
           }
           
-          if (factors.length === 0) {
-            // Constant term
-            target.push({ sign: sign, expr: _numberToAlgebriteStr(absCoeff) });
-          } else {
-            target.push({ sign: sign, expr: coeffPrefix + factors.join('*') });
-          }
+          if (grp.im) imagStrs.push(termExpr);
+          else realStrs.push(termExpr);
         }
         
-        // Build final expressions
-        function _buildAlgExpr(terms) {
-          if (terms.length === 0) return '0';
-          var s = '';
-          for (var i = 0; i < terms.length; i++) {
-            s += terms[i].sign + terms[i].expr;
-          }
-          if (s[0] === '+') s = s.substring(1);
-          return s;
+        // Build Algebrite expressions, factoring i out of imag
+        var realAlg = realStrs.length === 0 ? '0' : realStrs.join('+').replace(/\+\+/g,'+').replace(/\+\-/g,'-');
+        if (realAlg[0] === '+') realAlg = realAlg.substring(1);
+        
+        var imagAlg;
+        if (imagStrs.length === 0) {
+          imagAlg = '0';
+        } else {
+          imagAlg = 'i*((' + imagStrs.join(')+(').replace(/\+\-/g,'-') + '))';
         }
         
-        var realAlg = _buildAlgExpr(realTerms);
-        var imagAlg = _buildAlgExpr(imagTerms);
-        
-        var realSimplified = Algebrite.run('simplify(expand(' + realAlg + '))').trim();
-        var imagSimplified = Algebrite.run('simplify(expand(' + imagAlg + '))').trim();
+        var expanded = Algebrite.run('expand(' + realAlg + ')').trim();
+        var realSimplified = Algebrite.run('simplify(' + expanded + ')').trim();
+        var expImag = Algebrite.run('expand(' + imagAlg + ')').trim();
+        var imagSimplified = Algebrite.run('simplify(' + expImag + ')').trim();
         
         result[fullH][fullLs] = {
           real: realSimplified,
@@ -1369,8 +1228,8 @@ function getAngleFormulaSimplified(decayTree) {
         };
       } catch (e) {
         result[fullH][fullLs] = {
-          real: realStr,
-          imag: imagStr,
+          real: '0',
+          imag: '0',
           _raw: grouped
         };
       }
