@@ -553,6 +553,214 @@ function _binom(n, k, facts) {
   return Math.round(facts[n] / (facts[k] * facts[n - k]));
 }
 
+// ============================================================================
+// EXACT WIGNER-d WEIGHTS (symbolic strings, no floats)
+// ============================================================================
+
+/**
+ * Compute exact Wigner-d weight strings for a given (j,m1,m2).
+ * Each entry: {weightStr, sinPow, cosPow}
+ * Adapted for standalone use from get-angle.js.
+ */
+function _getExactWignerDWeights(J, m1, m2) {
+  var twoJ = Math.round(2 * J);
+  var jpm1 = Math.round(J + m1), jmm1 = Math.round(J - m1);
+  var jpm2 = Math.round(J + m2), jmm2 = Math.round(J - m2);
+
+  // Precompute factorials
+  var maxN = Math.max(jpm1, jmm1, jpm2, jmm2, twoJ + 2, 10);
+  var facts = [1];
+  for (var i = 1; i <= maxN; i++) facts[i] = facts[i-1] * i;
+
+  // Numerator product under sqrt: (j+m1)! (j-m1)! (j+m2)! (j-m2)!
+  var numNum = 1;
+  for (var i = 1; i <= jpm1; i++) numNum *= i;
+  for (var i = 1; i <= jmm1; i++) numNum *= i;
+  for (var i = 1; i <= jpm2; i++) numNum *= i;
+  for (var i = 1; i <= jmm2; i++) numNum *= i;
+
+  var weights = [];
+  for (var l = 0; l <= twoJ; l++) {
+    var k = (l + m2 - m1) / 2;
+    if (Math.abs(k - Math.round(k)) > 1e-10) continue;
+    k = Math.round(k);
+    if (k < Math.max(0, m2 - m1)) continue;
+    if (k > Math.min(jmm1, jpm2)) continue;
+
+    var sign = ((Math.round(m1 - m2) + k) % 2 === 0) ? '' : '-';
+
+    // Denominator product
+    var denom = 1;
+    if (jmm1 - k >= 0) { for (var i = 1; i <= jmm1 - k; i++) denom *= i; }
+    if (jpm2 - k >= 0) { for (var i = 1; i <= jpm2 - k; i++) denom *= i; }
+    if (Math.round(m1 - m2) + k >= 0) { for (var i = 1; i <= Math.round(m1 - m2) + k; i++) denom *= i; }
+    if (k >= 0) { for (var i = 1; i <= k; i++) denom *= i; }
+
+    // Extract perfect squares from numNum
+    var p = 1, r = numNum;
+    for (var i = 2; i * i <= r; i++) {
+      while (r % (i * i) === 0) { r /= (i * i); p *= i; }
+    }
+
+    // Reduce p/denom
+    var g = _intGcd(p, denom); p /= g; denom /= g;
+
+    // Build weight string
+    var wStr;
+    if (r === 1 && p === 1 && denom === 1) wStr = '1';
+    else if (r === 1 && denom === 1) wStr = String(p);
+    else if (p === 1 && r === 1) wStr = '1/' + denom;
+    else if (p === 1 && denom === 1) wStr = 'sqrt(' + r + ')';
+    else if (denom === 1 && r === 1) wStr = String(p);
+    else if (p === 1) wStr = 'sqrt(' + r + ')/' + denom;
+    else if (denom === 1) wStr = p + '*sqrt(' + r + ')';
+    else if (r === 1) wStr = p + '/' + denom;
+    else wStr = p + '*sqrt(' + r + ')/' + denom;
+
+    if (wStr !== '1' && wStr !== '0') wStr = sign + wStr;
+    else if (wStr === '1') wStr = sign + '1';
+
+    weights.push({ weightStr: wStr, sinPow: l, cosPow: twoJ - l });
+  }
+  return weights;
+}
+
+// ============================================================================
+// SIMPLIFIED WIGNER-d — half-angle Fourier expansion
+// ============================================================================
+
+/**
+ * Compute Wigner d-function using the half-angle Fourier expansion,
+ * producing a simplified expression in the {cos(kθ/2), sin(kθ/2)} basis.
+ *
+ * Uses the exact formula:
+ *   d^j_{m1,m2}(β) = Σ_l w_l · sin^l(β/2) cos^{2j-l}(β/2)
+ * where each sin^a cos^b term is expanded via expandHalfAngleBasis().
+ *
+ * @param {string} jStr
+ * @param {string} m1Str
+ * @param {string} m2Str
+ * @returns {{symbolic: string, latex: string, groups: Array, error: string}}
+ */
+function computeWignerDSimplified(jStr, m1Str, m2Str) {
+  if (typeof Algebrite === 'undefined') {
+    return { error: 'Algebrite library is not loaded.' };
+  }
+
+  var pj, pm1, pm2;
+  try {
+    pj = parseQuantumNumber(jStr);
+    pm1 = parseQuantumNumber(m1Str);
+    pm2 = parseQuantumNumber(m2Str);
+  } catch (e) {
+    return { error: e.message };
+  }
+
+  var jVal = pj.value, m1Val = pm1.value, m2Val = pm2.value;
+  var twoJ = Math.round(2 * jVal);
+
+  // Get exact symbolic weights
+  var weights = _getExactWignerDWeights(jVal, m1Val, m2Val);
+  if (weights.length === 0) {
+    return { symbolic: '0', latex: '0', groups: [] };
+  }
+
+  // Build coefficient map: key "func_k" → string array of coefficient terms
+  var coeffMap = {};
+  var zeroStr = '0';
+
+  for (var w = 0; w < weights.length; w++) {
+    var wt = weights[w];
+    var expansion = expandHalfAngleBasis(wt.sinPow, wt.cosPow);
+    for (var e = 0; e < expansion.length; e++) {
+      var ex = expansion[e];
+      var key = ex.func + '_' + ex.k;
+      if (!coeffMap[key]) {
+        coeffMap[key] = { coeffStrs: [], func: ex.func, k: ex.k };
+      }
+      // Combine weight string with expansion coefficient string
+      var combined;
+      if (ex.s === '0') continue;
+      if (ex.s === '1') combined = wt.weightStr;
+      else if (ex.s === '-1') combined = '-(' + wt.weightStr + ')';
+      else combined = '(' + wt.weightStr + ')*(' + ex.s + ')';
+      coeffMap[key].coeffStrs.push(combined);
+    }
+  }
+
+  // Simplify each group coefficient and build expression
+  var terms = [];
+  var groups = [];
+
+  for (var key in coeffMap) {
+    var grp = coeffMap[key];
+    var func = grp.func;
+    var k = grp.k;
+    var coeffStrs = grp.coeffStrs;
+
+    // Sum all coefficient contributions
+    var sumStr;
+    if (coeffStrs.length === 0) continue;
+    if (coeffStrs.length === 1) sumStr = coeffStrs[0];
+    else sumStr = '(' + coeffStrs.join(')+(') + ')';
+
+    // Simplify via Algebrite
+    var simplified;
+    try {
+      simplified = Algebrite.run('simplify(' + sumStr + ')').trim();
+    } catch(e) {
+      simplified = sumStr;
+    }
+    if (simplified === '0') continue;
+
+    // For k=0 (constant), k=1 (half-angle), else full simplification
+    var trigExpr;
+    if (func === '1') {
+      trigExpr = simplified;
+    } else if (k === 1) {
+      trigExpr = simplified + '*' + func + '(beta/2)';
+    } else if (k % 2 === 0) {
+      // Even k: cos(k*beta/2) = cos((k/2)*beta) — full-angle form
+      var fullK = k / 2;
+      trigExpr = simplified + '*' + func + '(' + (fullK === 1 ? '' : fullK + '*') + 'beta)';
+    } else {
+      // Odd k: stays as half-angle
+      trigExpr = simplified + '*' + func + '((' + k + '/2)*beta)';
+    }
+
+    terms.push(trigExpr);
+    groups.push({ coeff: simplified, func: func, k: k });
+  }
+
+  if (terms.length === 0) {
+    return { symbolic: '0', latex: '0', groups: [] };
+  }
+
+  // Build symbolic expression
+  var symExpr = terms.join(' + ').replace(/\+ -/g, '- ');
+
+  // Build LaTeX via Algebrite printlatex
+  var latexExpr = symExpr;
+  try {
+    latexExpr = Algebrite.run('simplify(' + symExpr + ')').trim();
+    // Expand (only helps when there are nested products)
+    latexExpr = Algebrite.run('expand(' + latexExpr + ')').trim();
+    latexExpr = Algebrite.run('printlatex(' + latexExpr + ')').trim();
+    // Fix LaTeX commands
+    latexExpr = latexExpr.replace(/(?<!\\)cos/g, '\\cos');
+    latexExpr = latexExpr.replace(/(?<!\\)sin/g, '\\sin');
+    latexExpr = latexExpr.replace(/(?<!\\)beta/g, '\\beta');
+  } catch(e) {
+    latexExpr = symExpr;
+  }
+
+  return {
+    symbolic: symExpr,
+    latex: latexExpr,
+    groups: groups
+  };
+}
+
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {
@@ -561,6 +769,7 @@ if (typeof module !== 'undefined' && module.exports) {
     computeWignerDMatrix: computeWignerDMatrix,
     runWignerDSanityChecks: runWignerDSanityChecks,
     getWignerDTerms: getWignerDTerms,
-    expandHalfAngleBasis: expandHalfAngleBasis
+    expandHalfAngleBasis: expandHalfAngleBasis,
+    computeWignerDSimplified: computeWignerDSimplified
   };
 }

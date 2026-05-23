@@ -337,6 +337,16 @@
                     Clear
                   </button>
                 </div>
+                <div class="form-group" style="margin-top: 0.75rem;">
+                  <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-size:0.8125rem;">
+                    <input type="checkbox" id="simplify-toggle" checked>
+                    <span>Show simplified Fourier expansion (for symbolic β)</span>
+                  </label>
+                  <p class="form-hint" style="margin-top:0.2rem">
+                    Expands each sin<sup>l</sup>(β/2) cos<sup>2j−l</sup>(β/2) term into cos(kβ/2) and sin(kβ/2) basis using the exact Fourier formula.
+                    For integer j this reduces to the full-angle basis cos(kβ), sin(kβ).
+                  </p>
+                </div>
               </form>
             </div>
           </div>
@@ -668,10 +678,33 @@ Otherwise w<sub>l</sub> = 0.</div>
         '<div class="result-item"><div class="result-label">Symbolic Form</div><div class="symbolic-result copiable" onclick="copyValue(this)" title="Click to copy">' + symbolicStr + '</div></div>' +
         '<div class="result-item"><div class="result-label">Decimal Value</div><div class="result-value small copiable" onclick="copyValue(this)" title="Click to copy">' + decimalStr + '</div></div>';
 
+      // Simplified expansion (only for symbolic beta)
+      var simplifyToggle = document.getElementById('simplify-toggle');
+      var simplifiedResult = null;
+      if (simplifyToggle && simplifyToggle.checked && !beta) {
+        try {
+          simplifiedResult = computeWignerDSimplified(j, m1, m2);
+        } catch(e) {}
+      }
+
       resultsBody.innerHTML = html;
 
       var mainTex = 'd^{' + qnToLatex(j) + '}_{' + qnToLatex(m1) + ',' + qnToLatex(m2) + '}(' + betaDisplay + ') \\;=\\; ' + latexStr;
       renderLatex(document.getElementById('latex-main'), mainTex);
+
+      // Append and render simplified result (needs its own MathJax pass)
+      if (simplifiedResult && !simplifiedResult.error && simplifiedResult.groups && simplifiedResult.groups.length > 0) {
+        var simpDiv = document.createElement('div');
+        simpDiv.className = 'result-item';
+        simpDiv.style.cssText = 'margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem';
+        simpDiv.innerHTML =
+          '<div class="result-label">Simplified Fourier Expansion</div>' +
+          '<div class="latex-render" id="latex-simplified" style="font-size:1rem"></div>' +
+          '<div class="symbolic-result copiable" style="margin-top:0.4rem;font-size:0.8rem" onclick="copyValue(this)" title="Click to copy">' + simplifiedResult.symbolic + '</div>';
+        resultsBody.appendChild(simpDiv);
+        var simpTex = 'd^{' + qnToLatex(j) + '}_{' + qnToLatex(m1) + ',' + qnToLatex(m2) + '}(\\beta) \\;=\\; ' + simplifiedResult.latex;
+        renderLatex(document.getElementById('latex-simplified'), simpTex);
+      }
     }
 
     function showMatrixResults(result, j, beta) {
