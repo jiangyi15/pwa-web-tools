@@ -673,6 +673,8 @@ function getAngleFormulaSimplified(decayTree) {
   for (var i = 0; i < nDecays; i++) {
     if (phiCombine && i === phiCombine.removeIdx) {
       phiNamesMap[i] = '0';           // fixed to zero
+    } else if (phiCombine && i === phiCombine.renameIdx) {
+      phiNamesMap[i] = 'chi';         // internal temp name
     } else {
       phiNamesMap[i] = 'phi_' + i;
     }
@@ -788,6 +790,20 @@ function getAngleFormulaSimplified(decayTree) {
           if (imagExpr[0] === '+') imagExpr = imagExpr.substring(1);
         }
         
+        // J=0 display: replace internal chi → explicit sum (phi_remove+phi_rename)
+        if (phiCombine) {
+          var chiPat = 'chi';
+          var chiDisp = '(phi_' + phiCombine.removeIdx + '+phi_' + phiCombine.renameIdx + ')';
+          if (realExpr.indexOf(chiPat) !== -1) realExpr = realExpr.split(chiPat).join(chiDisp);
+          if (imagExpr.indexOf(chiPat) !== -1) imagExpr = imagExpr.split(chiPat).join(chiDisp);
+          // Strip duplicate parens when sum sits directly inside a trig call (pm=1 case)
+          // e.g. cos((phi_1+phi_2)) → cos(phi_1+phi_2), but keep cos(2*(phi_1+phi_2))
+          var dup = '((phi_' + phiCombine.removeIdx + '+phi_' + phiCombine.renameIdx + '))';
+          var single = '(phi_' + phiCombine.removeIdx + '+phi_' + phiCombine.renameIdx + ')';
+          if (realExpr.indexOf(dup) !== -1) realExpr = realExpr.split(dup).join(single);
+          if (imagExpr.indexOf(dup) !== -1) imagExpr = imagExpr.split(dup).join(single);
+        }
+        
         result[fullH][fullLs] = {
           real: realExpr,
           imag: imagExpr
@@ -807,6 +823,8 @@ function getAngleFormulaSimplified(decayTree) {
   for (var i = 0; i < nDecays; i++) {
     if (phiCombine && i === phiCombine.removeIdx) {
       angles.push('\\theta_' + i);             // only theta (phi fixed to 0)
+    } else if (phiCombine && i === phiCombine.renameIdx) {
+      angles.push('(\\phi_{' + phiCombine.removeIdx + '}+\\phi_{' + phiCombine.renameIdx + '}), \\theta_' + i);
     } else {
       angles.push('\\phi_' + i + ', \\theta_' + i);
     }
