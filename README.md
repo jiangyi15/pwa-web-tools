@@ -120,14 +120,6 @@ MIT License — feel free to use, modify, and distribute.
 
 ## Contributing
 
-Contributions welcome! Ideas for future tools:
-
-- Wigner 3-j, 6-j, 9-j symbol calculators
-- Racah coefficients
-- Angular momentum eigenvalue problems
-- Spherical tensor operators
-- Decay width / Dalitz plot analysis
-
----
+Contributions welcome!
 
 Built with care for the hadron spectroscopy community. ⚛️
