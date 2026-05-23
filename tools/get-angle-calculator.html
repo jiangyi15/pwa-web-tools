@@ -551,7 +551,7 @@ Selection rules:
       // Build results table
       var html = '<div class="result-item"><div class="result-label">Angles: ' + result.angles.map(function(a) { return '\\(' + a + '\\)'; }).join('; ') + '</div></div>';
       if (result.chiInfo) {
-        html += '<div class="result-item result-note">\\( \\chi = ' + result.chiInfo + ' \\)</div>';
+        html += '<div class="result-item result-note"><span class="latex-cell" data-latex="\\chi = ' + escapeHtml(result.chiInfo) + '"></span></div>';
       }
       html += '<div class="result-item"><div class="result-label">Angular Formulas</div>';
       html += '<table class="result-table"><thead><tr><th>λ</th><th>LS</th><th>T(φ,θ)</th></tr></thead><tbody>';
