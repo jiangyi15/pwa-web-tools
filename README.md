@@ -1,4 +1,6 @@
 > **AI-Generated Project** — This project was developed through an interactive AI-assisted workflow using Opencode (Claude-based agent), iterating on physics tooling for hadron spectroscopy.
+> 
+> **Live Site**: [https://jiangyi15.github.io/pwa-web-tools](https://jiangyi15.github.io/pwa-web-tools)
 
 # Partial Wave Analysis Tools
 
