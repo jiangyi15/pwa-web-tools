@@ -744,7 +744,12 @@ function getAngleFormulaSimplified(decayTree) {
             sSum.add(Surd.parse(grp.coeffStrs[ci]));
           }
           if (sSum.isZero()) continue;
-          var coeffStr = sSum.toString();
+          // Use direct LaTeX from SurdSum internal representation
+          var coeffStr = sSum.toLatex();
+          // Wrap multi-group sums in parens so the trig product applies to all
+          if (coeffStr.indexOf(' + ') !== -1 || coeffStr.indexOf(' - ') !== -1) {
+            coeffStr = '(' + coeffStr + ')';
+          }
           
           // Build trig factor product
           var trigParts = [];

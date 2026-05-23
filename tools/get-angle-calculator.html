@@ -611,13 +611,8 @@ Selection rules:
     // Convert plaintext math expression to LaTeX
     function _strToLatex(s) {
       if (s === '0' || s === '') return s;
-      // Surd.toString() patterns:
-      // ±p*sqrt(r)/q  →  \frac{±p\sqrt{r}}{q}
-      s = s.replace(/(-?)(\d+)\*sqrt\((\d+)\)\/(\d+)/g, '$1\\frac{$2\\sqrt{$3}}{$4}');
-      // ±sqrt(r)/q  →  \frac{\sqrt{r}}{q}
-      s = s.replace(/(-?)sqrt\((\d+)\)\/(\d+)/g, '$1\\frac{\\sqrt{$2}}{$3}');
-      // ±sqrt(r)  →  ±\sqrt{r}
-      s = s.replace(/(-?)sqrt\((\d+)\)/g, '$1\\sqrt{$2}');
+      // Coefficients are already LaTeX from SurdSum.toLatex().
+      // Only convert trig names and plain math markup.
       // * → multiplication dot
       s = s.replace(/\*/g, '\\!\\cdot\\!');
       // Top-level N/D in coefficients (won't match trig args like theta_0/2)
