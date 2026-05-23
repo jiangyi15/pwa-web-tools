@@ -225,6 +225,17 @@ function computeWignerD(jStr, m1Str, m2Str, betaStr) {
  * @param {string} betaStr
  * @returns {{matrix: Array<Array>, mValues: Array<number>, error: string}}
  */
+/**
+ * Convert a numeric quantum-number value to fraction string.
+ * e.g. 0.5 → "1/2", -0.5 → "-1/2", 1 → "1", -1 → "-1"
+ */
+function numberToFractionStr(val) {
+  var twice = Math.round(val * 2);
+  if (twice % 2 === 0) return String(twice / 2);
+  var sign = twice < 0 ? '-' : '';
+  return sign + Math.abs(twice) + '/2';
+}
+
 function computeWignerDMatrix(jStr, betaStr) {
   if (typeof Algebrite === 'undefined') {
     return { error: 'Algebrite library is not loaded.' };
@@ -244,19 +255,17 @@ function computeWignerDMatrix(jStr, betaStr) {
   var jVal = pj.value;
   var twoJ = Math.round(2 * jVal);
 
-  // Generate m values: j, j-1, ..., -j
+  // Generate m values as fraction strings (j, j-1, ..., -j)
   var mValues = [];
   for (var i = 0; i <= twoJ; i++) {
-    mValues.push(jVal - i);
+    mValues.push(numberToFractionStr(jVal - i));
   }
 
   var matrix = [];
   for (var row = 0; row < mValues.length; row++) {
     var rowData = [];
     for (var col = 0; col < mValues.length; col++) {
-      var m1 = mValues[row];
-      var m2 = mValues[col];
-      var result = computeWignerD(jStr, String(m1), String(m2), betaStr);
+      var result = computeWignerD(jStr, mValues[row], mValues[col], betaStr);
       rowData.push(result);
     }
     matrix.push(rowData);
