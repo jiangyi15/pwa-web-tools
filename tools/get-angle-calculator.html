@@ -572,24 +572,19 @@ Selection rules:
       return copy;
     }
 
-    function pathLabel(path) {
-      if (path.length === 0) return 'A';
-      if (path.length === 1) return path[0] === 0 ? 'B' : 'C';
-      var label = path[0] === 0 ? 'B' : 'C';
-      for (var i = 1; i < path.length; i++) {
-        label += '<sub>' + (path[i] + 1) + '</sub>';
+    function buildPathNameMap(tree) {
+      var map = {};
+      var code = 65; // 'A'
+      function walk(node, path) {
+        map[path.join(',')] = String.fromCharCode(code);
+        code++;
+        if (node.children) {
+          walk(node.children[0], path.concat(0));
+          walk(node.children[1], path.concat(1));
+        }
       }
-      return label;
-    }
-
-    function pathLatex(path) {
-      if (path.length === 0) return 'A';
-      if (path.length === 1) return path[0] === 0 ? 'B' : 'C';
-      var label = path[0] === 0 ? 'B' : 'C';
-      for (var i = 1; i < path.length; i++) {
-        label += '_{' + (path[i] + 1) + '}';
-      }
-      return label;
+      if (tree) walk(tree, []);
+      return map;
     }
 
     function applyCombination(baseTree, combination) {
@@ -612,11 +607,12 @@ Selection rules:
       return String(Math.round(j));
     }
 
-    function buildCombinationLabel(combination) {
+    function buildCombinationLabel(combination, tree) {
+      var nameMap = buildPathNameMap(tree);
       var parts = [];
       for (var i = 0; i < combination.length; i++) {
         var c = combination[i];
-        parts.push(pathLabel(c.path) + '=' + formatSpinShort(c.value));
+        parts.push(nameMap[c.path.join(',')] + '=' + formatSpinShort(c.value));
       }
       return parts.join(', ');
     }
@@ -627,11 +623,12 @@ Selection rules:
       return String(Math.round(j));
     }
 
-    function buildCombinationLatexLabel(combination) {
+    function buildCombinationLatexLabel(combination, tree) {
+      var nameMap = buildPathNameMap(tree);
       var parts = [];
       for (var i = 0; i < combination.length; i++) {
         var c = combination[i];
-        parts.push(pathLatex(c.path) + '=' + formatSpinLatex(c.value));
+        parts.push(nameMap[c.path.join(',')] + '=' + formatSpinLatex(c.value));
       }
       return 'J(' + parts.join(',\\ ') + ')';
     }
@@ -660,8 +657,8 @@ Selection rules:
         for (var bi = 0; bi < combos.length; bi++) {
           batchTrees.push({
             tree: applyCombination(decayTree, combos[bi]),
-            label: buildCombinationLabel(combos[bi]),
-            latexLabel: buildCombinationLatexLabel(combos[bi])
+            label: buildCombinationLabel(combos[bi], decayTree),
+            latexLabel: buildCombinationLatexLabel(combos[bi], decayTree)
           });
         }
         if (batchTrees.length === 0) {
