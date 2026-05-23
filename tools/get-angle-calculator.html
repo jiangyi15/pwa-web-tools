@@ -290,11 +290,10 @@ Selection rules:
   };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
-  <script src="../assets/vendor/algebrite.bundle-for-browser.js"></script>
+  <script src="../assets/js/surd.js"></script>
   <script src="../assets/js/cg.js"></script>
   <script src="../assets/js/wigner-d.js"></script>
   <script src="../assets/js/get-angle.js"></script>
-  <script src="../assets/js/main.js"></script>
   <script>
     // Decay tree data structure
     var decayTree = {
@@ -495,11 +494,6 @@ Selection rules:
     });
 
     function calculate() {
-      if (typeof Algebrite === 'undefined') {
-        showError('Algebrite library is not loaded.');
-        return;
-      }
-      
       if (!decayTree.children) {
         showError('Root particle must decay. Click "Final" to make it decay.');
         return;
@@ -522,6 +516,7 @@ Selection rules:
             return;
           }
           
+
           showResults(result);
         } catch (e) {
           showError('Computation error: ' + (e.message || e));
@@ -585,39 +580,45 @@ Selection rules:
       var realPart = c.real;
       var imagPart = c.imag;
       
-      // Simplify and convert real part to LaTeX
-      try {
-        realPart = Algebrite.run('simplify(' + realPart + ')').trim();
-        realPart = Algebrite.run('printlatex(' + realPart + ')').trim();
-        realPart = realPart.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
-        realPart = realPart.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
-      } catch(e) {}
+      // Convert coefficient expression to LaTeX
+      // Expressions from the struct pipeline are already clean — no CAS needed
+      realPart = _strToLatex(realPart);
       
-      // Check if imag is zero
       if (imagPart === '0' || imagPart === '') {
         return realPart;
       }
       
-      // Simplify and convert imag part to LaTeX
-      try {
-        imagPart = Algebrite.run('simplify(' + imagPart + ')').trim();
-        imagPart = Algebrite.run('printlatex(' + imagPart + ')').trim();
-        imagPart = imagPart.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
-        imagPart = imagPart.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
-      } catch(e) {}
+      imagPart = _strToLatex(imagPart);
       
-      // Check again if imag became 0 after simplification
       if (imagPart === '0' || imagPart === '') {
         return realPart;
       }
       
-      // Purely imaginary: (imagPart)i
       if (realPart === '0' || realPart === '') {
         return '(' + imagPart + ')i';
       }
       
-      // Complex: realPart + (imagPart)i
       return realPart + ' + (' + imagPart + ')i';
+    }
+    
+    // Convert plaintext math expression to LaTeX
+    function _strToLatex(s) {
+      if (s === '0' || s === '') return s;
+      // Surd.toString() patterns:
+      // ±p*sqrt(r)/q  →  \frac{±p\sqrt{r}}{q}
+      s = s.replace(/(-?\d+)\*sqrt\((\d+)\)\/(\d+)/g, '\\frac{$1\\sqrt{$2}}{$3}');
+      // ±sqrt(r)/q  →  \frac{\sqrt{r}}{q}
+      s = s.replace(/(-?)sqrt\((\d+)\)\/(\d+)/g, '$1\\frac{\\sqrt{$2}}{$3}');
+      // ±sqrt(r)  →  ±\sqrt{r}
+      s = s.replace(/(-?)sqrt\((\d+)\)/g, '$1\\sqrt{$2}');
+      // * → multiplication dot
+      s = s.replace(/\*/g, '\\!\\cdot\\!');
+      // Top-level N/D in coefficients (won't match trig args like theta_0/2)
+      s = s.replace(/(^|[+\-*\\!])(-?\d+)\/(\d+)/g, '$1\\frac{$2}{$3}');
+      // Function names
+      s = s.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
+      s = s.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
+      return s;
     }
 
     function showError(msg) {
@@ -636,12 +637,8 @@ Selection rules:
       return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // Check Algebrite loaded
+    // Render tree on load
     document.addEventListener('DOMContentLoaded', function() {
-      if (typeof Algebrite === 'undefined') {
-        document.getElementById('results-body').innerHTML = '<div class="result-error"><strong>⚠️ Library Error</strong><br>Algebrite library failed to load.</div>';
-        document.getElementById('calculate-btn').disabled = true;
-      }
       renderTree();
     });
   </script>

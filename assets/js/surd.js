@@ -374,6 +374,42 @@ Surd.fromRadicand = function (r) {
   return new Surd(1, 1, 1, r);
 };
 
+/**
+ * Parse an Algebrite-compatible coefficient string into a Surd.
+ * Handles formats produced by _getExactWignerDWeights and CG:
+ *   "1", "-3", "3/4", "-3/4",
+ *   "sqrt(2)", "-sqrt(3)", "sqrt(3)/3", "-sqrt(5)/16",
+ *   "3*sqrt(2)/5", "-3*sqrt(2)/5", "4*sqrt(6)/3"
+ */
+Surd.parse = function (s) {
+  s = String(s).trim();
+  if (s === '0') return Surd.ZERO;
+  if (s === '1') return Surd.ONE;
+
+  var sign = 1;
+  if (s[0] === '-') { sign = -1; s = s.substring(1).trim(); }
+
+  // Pattern: p * sqrt(r) / q  or  sqrt(r) / q  or  p / q  or  p
+  // First, check for sqrt
+  var sqrtMatch = s.match(/^(\d*)\*?sqrt\((\d+)\)(?:\/(\d+))?$/);
+  if (sqrtMatch) {
+    var p = sqrtMatch[1] === '' ? 1 : parseInt(sqrtMatch[1], 10);
+    var r = parseInt(sqrtMatch[2], 10);
+    var q = sqrtMatch[3] === undefined ? 1 : parseInt(sqrtMatch[3], 10);
+    return new Surd(sign, p, q, r);
+  }
+
+  // Pure rational: "p/q" or "p"
+  var fracMatch = s.match(/^(\d+)(?:\/(\d+))?$/);
+  if (fracMatch) {
+    var p = parseInt(fracMatch[1], 10);
+    var q = fracMatch[2] === undefined ? 1 : parseInt(fracMatch[2], 10);
+    return new Surd(sign, p, q, 1);
+  }
+
+  throw new Error('Surd.parse: cannot parse "' + s + '"');
+};
+
 // ---- Node/browser export -----------------------------------------
 
 if (typeof module !== 'undefined' && module.exports) {

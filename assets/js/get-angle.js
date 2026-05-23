@@ -1,136 +1,13 @@
 /**
  * Get Angle Formula - Helicity Amplitude Angular Formula Calculator
  * 
- * Uses (real, imag) structure for complex numbers to avoid sqrt(-1) issues.
- * Complex operations:
- *   (r1,i1) + (r2,i2) = (r1+r2, i1+i2)
- *   (r1,i1) * (r2,i2) = (r1*r2 - i1*i2, r1*i2 + i1*r2)
+ * Uses a structured term pipeline built from CG coefficients
+ * (via computeCGExact) and Wigner-d half-angle Fourier expansions,
+ * combining coefficients via Surd/SurdSum exact arithmetic.
+ * No CAS dependency — all arithmetic is pure BigInt + integer gcd.
  */
 
-// ============================================================================
-// COMPLEX NUMBER OPERATIONS
-// ============================================================================
 
-/**
- * Create complex number: real + i*imag
- */
-function complex(real, imag) {
-  return { real: real, imag: imag };
-}
-
-/**
- * Complex from real number: r + i*0
- */
-function complexReal(r) {
-  return { real: r, imag: '0' };
-}
-
-/**
- * Complex add: (r1,i1) + (r2,i2)
- */
-function complexAdd(c1, c2) {
-  return {
-    real: '(' + c1.real + ') + (' + c2.real + ')',
-    imag: '(' + c1.imag + ') + (' + c2.imag + ')'
-  };
-}
-
-/**
- * Complex multiply: (r1,i1) * (r2,i2) = (r1*r2 - i1*i2, r1*i2 + i1*r2)
- */
-function complexMul(c1, c2) {
-  return {
-    real: '(' + c1.real + ')*(' + c2.real + ') - (' + c1.imag + ')*(' + c2.imag + ')',
-    imag: '(' + c1.real + ')*(' + c2.imag + ') + (' + c1.imag + ')*(' + c2.real + ')'
-  };
-}
-
-/**
- * Complex scale: s * (r, i)
- */
-function complexScale(s, c) {
-  return {
-    real: '(' + s + ')*(' + c.real + ')',
-    imag: '(' + s + ')*(' + c.imag + ')'
-  };
-}
-
-/**
- * Complex conjugate: (r, i)* = (r, -i)
- */
-function complexConj(c) {
-  return { real: c.real, imag: '-(' + c.imag + ')' };
-}
-
-/**
- * Simplify complex number (both parts)
- * Uses expand then simplify to help with trigonometric cancellations
- */
-function complexSimplify(c) {
-  try {
-    var realExpanded = Algebrite.run('expand(' + c.real + ')').trim();
-    var imagExpanded = Algebrite.run('expand(' + c.imag + ')').trim();
-    return {
-      real: Algebrite.run('simplify(' + realExpanded + ')').trim(),
-      imag: Algebrite.run('simplify(' + imagExpanded + ')').trim()
-    };
-  } catch (e) {
-    return c;
-  }
-}
-
-/**
- * Convert complex to display string
- */
-function complexToString(c) {
-  var r = c.real;
-  var i = c.imag;
-  if (i === '0') return r;
-  if (r === '0') return i + '*i';
-  return '(' + r + ' + ' + i + '*i)';
-}
-
-/**
- * Convert complex to LaTeX
- */
-function complexToLatex(c) {
-  var realPart = c.real;
-  var imagPart = c.imag;
-  
-  // Expand and simplify real part to LaTeX
-  try {
-    realPart = Algebrite.run('simplify(expand(' + realPart + '))').trim();
-    realPart = Algebrite.run('printlatex(' + realPart + ')').trim();
-    realPart = realPart.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
-    realPart = realPart.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
-  } catch(e) {}
-  
-  // Check if imag is zero
-  if (imagPart === '0' || imagPart === '') {
-    return realPart;
-  }
-  
-  // Expand and simplify imag part to LaTeX
-  try {
-    imagPart = Algebrite.run('simplify(expand(' + imagPart + '))').trim();
-    imagPart = Algebrite.run('printlatex(' + imagPart + ')').trim();
-    imagPart = imagPart.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
-    imagPart = imagPart.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
-  } catch(e) {}
-  
-  // Check again if imag became 0 after simplification
-  if (imagPart === '0' || imagPart === '') {
-    return realPart;
-  }
-  
-  // Purely imaginary: (imagPart)i
-  if (realPart === '0' || realPart === '') {
-    return '(' + imagPart + ')i';
-  }
-  
-  // Complex: realPart + (imagPart)i
-  return realPart + ' + (' + imagPart + ')i';
-}
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -216,95 +93,6 @@ function getLSCombinations(Ja, Jb, Jc) {
 }
 
 // ============================================================================
-// WIGNER D-FUNCTION (returns complex {real, imag})
-// ============================================================================
-
-/**
- * Compute Wigner D-conjugate: D^{J*}_{m,mp}(phi, theta)
- * D^{J*}_{m,mp} = exp(i*m*phi) * d^J_{m,mp}(theta)
- * 
- * Returns {real, imag} complex structure.
- * exp(i*m*phi) = cos(m*phi) + i*sin(m*phi)
- * So D* = cos(m*phi)*d + i*sin(m*phi)*d
- */
-function computeWignerDConj(J, m, mp, phiVar, thetaVar) {
-  J = toSpin(J).value;
-  m = toSpin(m).value;
-  mp = toSpin(mp).value;
-  
-  // Compute d-matrix element (real for real theta)
-  var dResult = computeWignerD(String(J), String(m), String(mp), thetaVar);
-  if (dResult.error) return null;
-  if (dResult.decimal === 0 && dResult.symbolic === '0') return complex('0', '0');
-  
-  var dExpr = dResult.symbolic;
-  
-  // If m = 0, exp(i*0*phi) = 1, so D* = d (purely real)
-  if (Math.abs(m) < 1e-10) {
-    return complex(dExpr, '0');
-  }
-  
-  // exp(i*m*phi) = cos(m*phi) + i*sin(m*phi)
-  var mStr = String(m);
-  var cosPart = 'cos((' + mStr + ')*' + phiVar + ')';
-  var sinPart = 'sin((' + mStr + ')*' + phiVar + ')';
-  
-  // D* = (cos + i*sin) * d = (cos*d, sin*d)
-  return {
-    real: '(' + cosPart + ')*(' + dExpr + ')',
-    imag: '(' + sinPart + ')*(' + dExpr + ')'
-  };
-}
-
-// ============================================================================
-// HELICITY AMPLITUDE (returns complex {real, imag})
-// ============================================================================
-
-/**
- * Compute helicity amplitude for a specific (l, s) combination.
- * Returns {real, imag} complex structure.
- */
-function computeHelicityAmp(Ja, Jb, Jc, la, lb, lc, phiVar, thetaVar, l, s) {
-  Ja = toSpin(Ja).value;
-  Jb = toSpin(Jb).value;
-  Jc = toSpin(Jc).value;
-  
-  var delta = lb - lc;
-  if (Math.abs(delta) > Ja + 1e-10) return null;
-  
-  // CG1: <Jb, lb; Jc, -lc | s, delta> (real)
-  var cg1 = computeCG(
-    formatSpin(toSpin(Jb)), formatSpin(toSpin(lb)),
-    formatSpin(toSpin(Jc)), formatSpin(toSpin(-lc)),
-    formatSpin(toSpin(s)), formatSpin(toSpin(delta))
-  );
-  if (cg1.error || (cg1.decimal === 0 && cg1.symbolic === '0')) return null;
-  
-  // CG2: <l, 0; s, delta | Ja, delta> (real)
-  var cg2 = computeCG(
-    String(l), '0',
-    formatSpin(toSpin(s)), formatSpin(toSpin(delta)),
-    formatSpin(toSpin(Ja)), formatSpin(toSpin(delta))
-  );
-  if (cg2.error || (cg2.decimal === 0 && cg2.symbolic === '0')) return null;
-  
-  // Coefficient sqrt((2l+1)/(2Ja+1)) (real)
-  var coeff = 'sqrt(' + (2*l + 1) + '/' + (Math.round(2*Ja) + 1) + ')';
-  
-  // Full real coefficient: coeff * cg1 * cg2
-  var realCoeff = '(' + coeff + ')*(' + cg1.symbolic + ')*(' + cg2.symbolic + ')';
-  
-  // Wigner D conjugate (complex)
-  var Dconj = computeWignerDConj(Ja, la, delta, phiVar, thetaVar);
-  if (!Dconj) return null;
-  
-  // Amplitude = realCoeff * Dconj
-  var result = complexScale(realCoeff, Dconj);
-  
-  return complexSimplify(result);
-}
-
-// ============================================================================
 // DECAY STRUCTURE
 // ============================================================================
 
@@ -331,274 +119,6 @@ function getVertices(node, idx) {
   vertices = vertices.concat(getVertices(node.children[1], idx));
   
   return vertices;
-}
-
-// ============================================================================
-// MAIN COMPUTATION
-// ============================================================================
-
-/**
- * Build amplitude for a single decay vertex.
- * Returns {ls_key: {helicity_key: {real, imag}}}
- */
-function buildVertexAmp(vertex, phiVar, thetaVar) {
-  var Ja = toSpin(vertex.Ja);
-  var Jb = toSpin(vertex.Jb);
-  var Jc = toSpin(vertex.Jc);
-  
-  var las = getHelicities(Ja);
-  var lbs = getHelicities(Jb);
-  var lcs = getHelicities(Jc);
-  var lsPairs = getLSCombinations(Ja, Jb, Jc);
-  
-  var amp = {};
-  
-  for (var i = 0; i < lsPairs.length; i++) {
-    var ls = lsPairs[i];
-    var lsKey = ls.l + ',' + ls.s;
-    amp[lsKey] = {};
-    
-    for (var ia = 0; ia < las.length; ia++) {
-      for (var ib = 0; ib < lbs.length; ib++) {
-        for (var ic = 0; ic < lcs.length; ic++) {
-          var la = las[ia].value;
-          var lb = lbs[ib].value;
-          var lc = lcs[ic].value;
-          
-          var result = computeHelicityAmp(Ja, Jb, Jc, la, lb, lc, phiVar, thetaVar, ls.l, ls.s);
-          
-          if (result && (result.real !== '0' || result.imag !== '0')) {
-            var hKey = la + ',' + lb + ',' + lc;
-            amp[lsKey][hKey] = result;
-          }
-        }
-      }
-    }
-    
-    if (Object.keys(amp[lsKey]).length === 0) {
-      delete amp[lsKey];
-    }
-  }
-  
-  return amp;
-}
-
-/**
- * Main function: compute angle formula for a decay tree.
- */
-function getAngleFormula(decayTree) {
-  if (typeof Algebrite === 'undefined') {
-    return { error: 'Algebrite library is not loaded.' };
-  }
-  
-  if (!decayTree.children) {
-    return { error: 'Decay tree must have at least one decay.' };
-  }
-  
-  var vertices = getVertices(decayTree);
-  var nDecays = vertices.length;
-  
-  // Build amplitude for each vertex
-  var amps = [];
-  for (var i = 0; i < vertices.length; i++) {
-    var phiVar = 'phi_' + i;
-    var thetaVar = 'theta_' + i;
-    amps.push({
-      vertex: vertices[i],
-      phi: phiVar,
-      theta: thetaVar,
-      amp: buildVertexAmp(vertices[i], phiVar, thetaVar)
-    });
-  }
-  
-  // Combine amplitudes
-  var result = combineAmps(amps, decayTree);
-  
-  // Build angle list
-  var angles = [];
-  for (var i = 0; i < nDecays; i++) {
-    angles.push('phi_' + i + ', theta_' + i);
-  }
-  
-  return {
-    helicities: result,
-    nDecays: nDecays,
-    angles: angles
-  };
-}
-
-// ============================================================================
-// AMPLITUDE COMBINATION (complex multiplication)
-// ============================================================================
-
-function combineAmps(amps, tree) {
-  if (amps.length === 1) {
-    return formatSingleAmp(amps[0].amp);
-  }
-  return combineRecursive(amps, tree, 0);
-}
-
-function formatSingleAmp(amp) {
-  var result = {};
-  for (var ls in amp) {
-    for (var h in amp[ls]) {
-      if (!(h in result)) result[h] = {};
-      result[h][ls] = amp[ls][h];
-    }
-  }
-  return result;
-}
-
-function combineRecursive(amps, node, idx) {
-  var amp = amps[idx];
-  var result = {};
-  
-  var child0Decays = node.children && node.children[0].children;
-  var child1Decays = node.children && node.children[1].children;
-  
-  for (var ls in amp.amp) {
-    for (var h in amp.amp[ls]) {
-      var hparts = h.split(',').map(parseFloat);
-      var la = hparts[0], lb = hparts[1], lc = hparts[2];
-      var expr = amp.amp[ls][h]; // {real, imag}
-      
-      if (child0Decays && child1Decays) {
-        var amp0 = combineRecursive(amps, node.children[0], idx + 1);
-        var child0Size = countDecayVertices(node.children[0]);
-        var amp1 = combineRecursive(amps, node.children[1], idx + 1 + child0Size);
-        
-        for (var h0 in amp0) {
-          var h0parts = h0.split(',').map(parseFloat);
-          if (Math.abs(h0parts[0] - lb) > 1e-10) continue;
-          
-          for (var h1 in amp1) {
-            var h1parts = h1.split(',').map(parseFloat);
-            if (Math.abs(h1parts[0] - lc) > 1e-10) continue;
-            
-            for (var ls0 in amp0[h0]) {
-              for (var ls1 in amp1[h1]) {
-                var fullLs = ls + ';' + ls0 + ';' + ls1;
-                var fullH = la + ',' + h0parts.slice(1).join(',') + ',' + h1parts.slice(1).join(',');
-                
-                // Complex multiplication: expr * amp0 * amp1
-                var prod1 = complexMul(expr, amp0[h0][ls0]);
-                var combined = complexMul(prod1, amp1[h1][ls1]);
-                combined = complexSimplify(combined);
-                
-                // SUM over intermediate helicities
-                if (!(fullH in result)) result[fullH] = {};
-                if (!(fullLs in result[fullH])) {
-                  result[fullH][fullLs] = combined;
-                } else {
-                  result[fullH][fullLs] = complexAdd(result[fullH][fullLs], combined);
-                  result[fullH][fullLs] = complexSimplify(result[fullH][fullLs]);
-                }
-              }
-            }
-          }
-        }
-      } else if (child0Decays) {
-        var amp0 = combineRecursive(amps, node.children[0], idx + 1);
-        
-        for (var h0 in amp0) {
-          var h0parts = h0.split(',').map(parseFloat);
-          if (Math.abs(h0parts[0] - lb) > 1e-10) continue;
-          
-          for (var ls0 in amp0[h0]) {
-            var fullLs = ls + ';' + ls0;
-            var fullH = la + ',' + h0parts.slice(1).join(',') + ',' + lc;
-            
-            var combined = complexMul(expr, amp0[h0][ls0]);
-            combined = complexSimplify(combined);
-            
-            // SUM over intermediate helicities
-            if (!(fullH in result)) result[fullH] = {};
-            if (!(fullLs in result[fullH])) {
-              result[fullH][fullLs] = combined;
-            } else {
-              result[fullH][fullLs] = complexAdd(result[fullH][fullLs], combined);
-              result[fullH][fullLs] = complexSimplify(result[fullH][fullLs]);
-            }
-          }
-        }
-      } else if (child1Decays) {
-        var child0Size = countDecayVertices(node.children[0]);
-        var amp1 = combineRecursive(amps, node.children[1], idx + 1 + child0Size);
-        
-        for (var h1 in amp1) {
-          var h1parts = h1.split(',').map(parseFloat);
-          if (Math.abs(h1parts[0] - lc) > 1e-10) continue;
-          
-          for (var ls1 in amp1[h1]) {
-            var fullLs = ls + ';' + ls1;
-            var fullH = la + ',' + lb + ',' + h1parts.slice(1).join(',');
-            
-            var combined = complexMul(expr, amp1[h1][ls1]);
-            combined = complexSimplify(combined);
-            
-            // SUM over intermediate helicities
-            if (!(fullH in result)) result[fullH] = {};
-            if (!(fullLs in result[fullH])) {
-              result[fullH][fullLs] = combined;
-            } else {
-              result[fullH][fullLs] = complexAdd(result[fullH][fullLs], combined);
-              result[fullH][fullLs] = complexSimplify(result[fullH][fullLs]);
-            }
-          }
-        }
-      } else {
-        var fullH = la + ',' + lb + ',' + lc;
-        if (!(fullH in result)) result[fullH] = {};
-        result[fullH][ls] = expr;
-      }
-    }
-  }
-  
-  return result;
-}
-
-// ============================================================================
-// LATEX OUTPUT
-// ============================================================================
-
-function resultToLatex(result) {
-  var lines = [];
-  lines.push('\\begin{array}{lll}');
-  lines.push('\\hline');
-  lines.push('\\lambda & LS & T(\\phi_i, \\theta_i) \\\\');
-  lines.push('\\hline');
-  
-  var hs = Object.keys(result.helicities).sort();
-  for (var i = 0; i < hs.length; i++) {
-    var h = hs[i];
-    var lsDict = result.helicities[h];
-    var lss = Object.keys(lsDict).sort();
-    
-    for (var j = 0; j < lss.length; j++) {
-      var ls = lss[j];
-      var c = lsDict[ls]; // {real, imag}
-      
-      var latexExpr = complexToLatex(c);
-      
-      var hLatex = '(' + h.split(',').map(function(x) {
-        var v = parseFloat(x);
-        var s = toSpin(v);
-        if (s.den === 2) return '\\tfrac{' + s.num + '}{2}';
-        return String(v);
-      }).join(', ') + ')';
-      
-      var lsLatex = '(' + ls.split(';').map(function(x) {
-        return '(' + x + ')';
-      }).join(', ') + ')';
-      
-      lines.push('$' + hLatex + '$ & $' + lsLatex + '$ & $' + latexExpr + '$ \\\\');
-    }
-  }
-  
-  lines.push('\\hline');
-  lines.push('\\end{array}');
-  
-  return lines.join('\n');
 }
 
 // ============================================================================
@@ -749,19 +269,20 @@ function _getOneHelicityStruct(Ja, Jb, Jc, la, lb, lc, thetaIdx, phiIdx, l, s) {
   var delta = lb - lc;
   if (Math.abs(delta) > Ja + 1e-10) return null;
   
-  var cg1 = computeCG(formatSpin(toSpin(Jb)), formatSpin(toSpin(lb)),
-                      formatSpin(toSpin(Jc)), formatSpin(toSpin(-lc)),
-                      formatSpin(toSpin(s)), formatSpin(toSpin(delta)));
-  if (cg1.error || (Math.abs(cg1.decimal) < 1e-14 && cg1.symbolic === '0')) return null;
+  var cg1 = computeCGExact(formatSpin(toSpin(Jb)), formatSpin(toSpin(lb)),
+                           formatSpin(toSpin(Jc)), formatSpin(toSpin(-lc)),
+                           formatSpin(toSpin(s)), formatSpin(toSpin(delta)));
+  if (cg1.isZero()) return null;
   
-  var cg2 = computeCG(String(l), '0',
-                      formatSpin(toSpin(s)), formatSpin(toSpin(delta)),
-                      formatSpin(toSpin(Ja)), formatSpin(toSpin(delta)));
-  if (cg2.error || (Math.abs(cg2.decimal) < 1e-14 && cg2.symbolic === '0')) return null;
+  var cg2 = computeCGExact(String(l), '0',
+                           formatSpin(toSpin(s)), formatSpin(toSpin(delta)),
+                           formatSpin(toSpin(Ja)), formatSpin(toSpin(delta)));
+  if (cg2.isZero()) return null;
   
-  // Build coefficient string: sqrt((2l+1)/(2Ja+1)) * cg1 * cg2
-  var sqrtPart = 'sqrt(' + (2*l + 1) + '/' + (Math.round(2*Ja) + 1) + ')';
-  var coeffStr = sqrtPart + '*(' + cg1.symbolic + ')*(' + cg2.symbolic + ')';
+  // Coefficient: sqrt((2l+1)/(2Ja+1)) * cg1 * cg2  as exact Surd
+  var sqrtPart = Surd.div(Surd.fromRadicand(2 * l + 1),
+                          Surd.fromRadicand(Math.round(2 * Ja) + 1));
+  var coeff = Surd.mul(Surd.mul(sqrtPart, cg1), cg2);
   
   // Get exact Wigner-d weight strings
   var wdWeights = _getExactWignerDWeights(Ja, la, delta);
@@ -770,16 +291,19 @@ function _getOneHelicityStruct(Ja, Jb, Jc, la, lb, lc, thetaIdx, phiIdx, l, s) {
   var terms = [];
   for (var i = 0; i < wdWeights.length; i++) {
     var wt = wdWeights[i];
-    var termCoeffStr = coeffStr + '*(' + wt.weightStr + ')';
+    // Pre-combine coefficient with Wigner-d weight as exact Surd
+    var termSurd = Surd.mul(coeff, Surd.parse(wt.weightStr));
+    var termCoeffStr = termSurd.toString();
     
     if (Math.abs(la) < 1e-10) {
       terms.push(_st(termCoeffStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, '1', 0));
     } else {
       var absLA = Math.abs(la);
       var sinSign = la < 0 ? -1 : 1;
-      // For cos: coefficient stays as-is. For sin: multiply by sinSign
       terms.push(_st(termCoeffStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, 'cos', absLA));
-      var sinStr = sinSign < 0 ? '-(' + termCoeffStr + ')' : termCoeffStr;
+      // For sin: multiply coefficient by sinSign
+      var sinSurd = Surd.scale(termSurd, sinSign);
+      var sinStr = sinSurd.toString();
       terms.push(_sti(sinStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, 'sin', absLA));
     }
   }
@@ -926,21 +450,29 @@ function _mulTwo(ta, tb) {
   var theta = _mergeThetaPair(ta, tb);
   var phi = _mergePhiPair(ta, tb);
   
+  // Multiply coefficients as exact Surds (both are clean Surd strings)
+  var sA = Surd.parse(ta.s);
+  var sB = Surd.parse(tb.s);
+  
   var result = [];
   // (ar + i*ai)*(br + i*bi) = (ar*br - ai*bi) + i*(ar*bi + ai*br)
-  // Coefficient: concatenate as Algebrite product strings
   
   if (!ta.im && !tb.im) {
-    result.push({ s: '(' + ta.s + ')*(' + tb.s + ')', _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: false });
+    var s = Surd.mul(sA, sB);
+    result.push({ s: s.toString(), _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: false });
   }
   if (ta.im && tb.im) {
-    result.push({ s: '-(' + ta.s + ')*(' + tb.s + ')', _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: false });
+    // -ai*bi
+    var s = Surd.scale(Surd.mul(sA, sB), -1);
+    result.push({ s: s.toString(), _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: false });
   }
   if (!ta.im && tb.im) {
-    result.push({ s: '(' + ta.s + ')*(' + tb.s + ')', _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: true });
+    var s = Surd.mul(sA, sB);
+    result.push({ s: s.toString(), _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: true });
   }
   if (ta.im && !tb.im) {
-    result.push({ s: '(' + ta.s + ')*(' + tb.s + ')', _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: true });
+    var s = Surd.mul(sA, sB);
+    result.push({ s: s.toString(), _tbatch: theta._tbatch, _pbatch: phi._pbatch, im: true });
   }
   return result;
 }
@@ -1056,11 +588,11 @@ function _expandStructTerm(term) {
         if (he.func !== '1') {
           nb.push({ idx: tt.idx, func: he.func, k: he.k });
         }
-        // String coefficient multiplication
+        // Multiply coefficient as exact Surd (he.s is a rational string like "1/4")
         var newS;
         if (he.s === '1') newS = base.s;
-        else if (he.s === '-1') newS = '-(' + base.s + ')';
-        else newS = '(' + base.s + ')*(' + he.s + ')';
+        else if (he.s === '-1') newS = Surd.scale(Surd.parse(base.s), -1).toString();
+        else newS = Surd.mul(Surd.parse(base.s), Surd.parse(he.s)).toString();
         
         newList.push({ s: newS, thetaBasis: nb, phiBasis: base.phiBasis, im: base.im });
       }
@@ -1105,9 +637,6 @@ function _basisKey(basis) {
  * Returns same format as getAngleFormula but with trig-simplified {real, imag}.
  */
 function getAngleFormulaSimplified(decayTree) {
-  if (typeof Algebrite === 'undefined') {
-    return { error: 'Algebrite library is not loaded.' };
-  }
   if (!decayTree.children) {
     return { error: 'Decay tree must have at least one decay.' };
   }
@@ -1156,23 +685,20 @@ function getAngleFormulaSimplified(decayTree) {
       // Group by basis
       var grouped = _groupExpandedTerms(allExpanded);
       
-      // Reconstruct simplified expressions using Algebrite
+      // Reconstruct expressions using SurdSum (no Algebrite)
       try {
         var realStrs = [], imagStrs = [];
         
         for (var g = 0; g < grouped.length; g++) {
           var grp = grouped[g];
           
-          // Build coefficient expression from summed strings
-          var coeffRaw;
-          if (grp.coeffStrs.length === 1) {
-            coeffRaw = grp.coeffStrs[0];
-          } else {
-            coeffRaw = '(' + grp.coeffStrs.join(')+(') + ')';
+          // Combine coefficients with SurdSum
+          var sSum = new SurdSum();
+          for (var ci = 0; ci < grp.coeffStrs.length; ci++) {
+            sSum.add(Surd.parse(grp.coeffStrs[ci]));
           }
-          // Simplify the coefficient
-          var coeffExpr = Algebrite.run('simplify(' + coeffRaw + ')').trim();
-          if (coeffExpr === '0') continue;
+          if (sSum.isZero()) continue;
+          var coeffStr = sSum.toString();
           
           // Build trig factor product
           var trigParts = [];
@@ -1195,9 +721,8 @@ function getAngleFormulaSimplified(decayTree) {
             else { trigParts.push(pb.pf + '(' + pn + ')'); }
           }
           
-          // Build complete term (coefficient already includes all numeric factors)
-          // For imag: exclude *i from individual terms, factor it out later
-          var termExpr = coeffExpr;
+          // Build complete term
+          var termExpr = coeffStr;
           if (trigParts.length > 0) {
             termExpr = termExpr + '*' + trigParts.join('*');
           }
@@ -1206,27 +731,22 @@ function getAngleFormulaSimplified(decayTree) {
           else realStrs.push(termExpr);
         }
         
-        // Build Algebrite expressions, factoring i out of imag
-        var realAlg = realStrs.length === 0 ? '0' : realStrs.join('+').replace(/\+\+/g,'+').replace(/\+\-/g,'-');
-        if (realAlg[0] === '+') realAlg = realAlg.substring(1);
+        // Each group has a unique trig basis (from _groupExpandedTerms),
+        // so no like-term combining needed across groups. Just join.
+        var realExpr = realStrs.length === 0 ? '0' : realStrs.join('+').replace(/\+\-/g,'-');
+        if (realExpr[0] === '+') realExpr = realExpr.substring(1);
         
-        var imagAlg;
+        var imagExpr;
         if (imagStrs.length === 0) {
-          imagAlg = '0';
+          imagExpr = '0';
         } else {
-          // No i prefix — imag is the real-valued coefficient of i
-          imagAlg = imagStrs.join('+').replace(/\+\+/g,'+').replace(/\+\-/g,'-');
-          if (imagAlg[0] === '+') imagAlg = imagAlg.substring(1);
+          imagExpr = imagStrs.join('+').replace(/\+\-/g,'-');
+          if (imagExpr[0] === '+') imagExpr = imagExpr.substring(1);
         }
         
-        var expanded = Algebrite.run('expand(' + realAlg + ')').trim();
-        var realSimplified = Algebrite.run('simplify(' + expanded + ')').trim();
-        var expImag = Algebrite.run('expand(' + imagAlg + ')').trim();
-        var imagSimplified = Algebrite.run('simplify(' + expImag + ')').trim();
-        
         result[fullH][fullLs] = {
-          real: realSimplified,
-          imag: imagSimplified
+          real: realExpr,
+          imag: imagExpr
         };
       } catch (e) {
         result[fullH][fullLs] = {
@@ -1255,12 +775,7 @@ function getAngleFormulaSimplified(decayTree) {
 // Export
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = { 
-    getAngleFormula: getAngleFormula, 
     getAngleFormulaSimplified: getAngleFormulaSimplified,
-    resultToLatex: resultToLatex, 
-    toSpin: toSpin,
-    complex: complex,
-    complexAdd: complexAdd,
-    complexMul: complexMul
+    toSpin: toSpin
   };
 }
