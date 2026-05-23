@@ -202,8 +202,11 @@
             <div class="calc-card-body">
               <div class="input-section">
                 <div class="input-section-title">Build Decay Structure</div>
-                <p class="form-hint" style="margin-bottom: 1rem;">
+                <p class="form-hint" style="margin-bottom: 0.5rem;">
                   Set parent spin, then add children. Each child can either be a final state or decay further.
+                </p>
+                <p class="form-hint" style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem;">
+                  💡 Batch mode: enter comma-separated J values (e.g. <code>1,2,3</code>) to generate formulas for all spin combinations.
                 </p>
                 
                 <!-- Root node -->
@@ -231,6 +234,7 @@
             <div class="examples-grid">
               <button type="button" class="example-btn" data-example='simple'>J=0 → J=0 + J=0</button>
               <button type="button" class="example-btn" data-example='cascade1'>J=0 → J=1 + J=1 (cascade)</button>
+              <button type="button" class="example-btn" data-example='batch'>J=1,2 → 0+0 (batch)</button>
             </div>
           </div>
         </div>
@@ -348,6 +352,7 @@ Selection rules:
       jInput.value = formatSpinValue(node.j);
       jInput.dataset.path = path.join(',');
       jInput.addEventListener('change', function() {
+        if (this.value.indexOf(',') !== -1) return; // batch mode
         updateNodeJ(path, this.value);
       });
       content.appendChild(jInput);
@@ -468,8 +473,15 @@ Selection rules:
             ]
           };
           break;
+        case 'batch':
+          decayTree = { j: 1, children: [{ j: 0, children: null }, { j: 0, children: null }] };
+          break;
       }
       renderTree();
+      if (name === 'batch') {
+        var rootInput = document.querySelector('#decay-tree-container > .tree-node > .node-content > .form-input');
+        if (rootInput) rootInput.value = '1,2';
+      }
       document.getElementById('calculate-btn').focus();
     }
 
@@ -487,6 +499,109 @@ Selection rules:
       });
     });
 
+    // ===================================================================
+    // BATCH MODE — comma-separated J values
+    // ===================================================================
+    function parseSpinList(str) {
+      var parts = str.split(',');
+      var result = [];
+      for (var i = 0; i < parts.length; i++) {
+        var s = toSpin(parts[i].trim());
+        if (isNaN(s.value)) return null;
+        result.push(s.value);
+      }
+      return result;
+    }
+
+    function isBatchMode() {
+      var inputs = document.querySelectorAll('.tree-node .form-input');
+      for (var i = 0; i < inputs.length; i++) {
+        if (inputs[i].value.indexOf(',') !== -1) return true;
+      }
+      return false;
+    }
+
+    function collectSpinLists() {
+      var inputs = document.querySelectorAll('.tree-node .form-input');
+      var lists = [];
+      for (var i = 0; i < inputs.length; i++) {
+        var val = inputs[i].value.trim();
+        var pathStr = inputs[i].dataset.path;
+        var path = pathStr ? pathStr.split(',').map(function(x) { return parseInt(x, 10); }) : [];
+        var values = parseSpinList(val);
+        if (values) lists.push({ path: path, values: values });
+      }
+      return lists;
+    }
+
+    function generateCartesianProduct(lists) {
+      var results = [];
+      function recurse(idx, current) {
+        if (idx >= lists.length) {
+          results.push(current.slice());
+          return;
+        }
+        for (var i = 0; i < lists[idx].values.length; i++) {
+          current.push({ path: lists[idx].path, value: lists[idx].values[i] });
+          recurse(idx + 1, current);
+          current.pop();
+        }
+      }
+      recurse(0, []);
+      return results;
+    }
+
+    function cloneTree(node) {
+      if (!node) return null;
+      var copy = { j: node.j };
+      if (node.children) {
+        copy.children = [
+          cloneTree(node.children[0]),
+          cloneTree(node.children[1])
+        ];
+      }
+      return copy;
+    }
+
+    function pathLabel(path) {
+      if (path.length === 0) return 'A';
+      if (path.length === 1) return path[0] === 0 ? 'B' : 'C';
+      var label = path[0] === 0 ? 'B' : 'C';
+      for (var i = 1; i < path.length; i++) {
+        label += '<sub>' + (path[i] + 1) + '</sub>';
+      }
+      return label;
+    }
+
+    function applyCombination(baseTree, combination) {
+      var t = cloneTree(baseTree);
+      for (var i = 0; i < combination.length; i++) {
+        var node = t;
+        var p = combination[i].path;
+        for (var j = 0; j < p.length; j++) {
+          if (!node.children) break;
+          node = node.children[p[j]];
+        }
+        node.j = combination[i].value;
+      }
+      return t;
+    }
+
+    function formatSpinShort(j) {
+      if (Math.abs(j - 0.5) < 1e-10) return '½';
+      if (Math.abs(j - 1.5) < 1e-10) return '<sup>3</sup>⁄<sub>2</sub>';
+      return String(Math.round(j));
+    }
+
+    function buildCombinationLabel(combination) {
+      var parts = [];
+      for (var i = 0; i < combination.length; i++) {
+        var c = combination[i];
+        parts.push(pathLabel(c.path) + '=' + formatSpinShort(c.value));
+      }
+      return parts.join(', ');
+    }
+
     function calculate() {
       if (!decayTree.children) {
         showError('Root particle must decay. Click "Final" to make it decay.');
@@ -501,63 +616,119 @@ Selection rules:
       statusText.textContent = 'Computing...';
       resultsBody.innerHTML = '<p style="color: var(--text-muted);" class="loading">Computing angular formulas...</p>';
 
+      // Check batch mode
+      var batch = isBatchMode();
+      var batchTrees = [];
+
+      if (batch) {
+        var lists = collectSpinLists();
+        var combos = generateCartesianProduct(lists);
+        for (var bi = 0; bi < combos.length; bi++) {
+          batchTrees.push({
+            tree: applyCombination(decayTree, combos[bi]),
+            label: buildCombinationLabel(combos[bi])
+          });
+        }
+        if (batchTrees.length === 0) {
+          showError('No valid combinations.');
+          return;
+        }
+      } else {
+        batchTrees.push({ tree: decayTree, label: '' });
+      }
+
       setTimeout(function() {
         try {
-          var result = getAngleFormulaSimplified(decayTree);
-          
-          if (result.error) {
-            showError(result.error);
+          var results = [];
+          var nOk = 0, nErr = 0;
+
+          for (var bi = 0; bi < batchTrees.length; bi++) {
+            try {
+              var result = getAngleFormulaSimplified(batchTrees[bi].tree);
+              if (result && !result.error) {
+                results.push({ label: batchTrees[bi].label, result: result, error: null });
+                nOk++;
+              } else {
+                results.push({ label: batchTrees[bi].label, result: null, error: result ? result.error : 'Unknown error' });
+                nErr++;
+              }
+            } catch (e) {
+              results.push({ label: batchTrees[bi].label, result: null, error: e.message || 'Computation error' });
+              nErr++;
+            }
+          }
+
+          if (nOk === 0) {
+            showError('All combinations failed. ' + (nErr > 0 ? 'Last error: ' + results[results.length-1].error : ''));
             return;
           }
-          
 
-          showResults(result);
+          showBatchResults(results, batch);
         } catch (e) {
           showError('Computation error: ' + (e.message || e));
         }
       }, 10);
     }
 
-    function showResults(result) {
+    function showBatchResults(results, batch) {
       var statusIndicator = document.getElementById('status-indicator');
       var statusText = document.getElementById('status-text');
       var resultsBody = document.getElementById('results-body');
-      
-      var nHelicities = Object.keys(result.helicities).length;
-      if (nHelicities === 0) {
-        statusIndicator.className = 'status-indicator error';
-        statusText.textContent = 'No valid amplitudes';
-        resultsBody.innerHTML = '<p style="color: var(--text-muted);">No valid helicity combinations found. Check selection rules.</p>';
-        return;
-      }
-      
-      statusIndicator.className = 'status-indicator success';
-      statusText.textContent = 'Found ' + nHelicities + ' helicity combination(s)';
-      
-      // Build results table
-      var html = '<div class="result-item"><div class="result-label">Angular Formulas</div>';
-      html += '<table class="result-table"><thead><tr><th>λ</th><th>LS</th><th>T(φ,θ)</th></tr></thead><tbody>';
-      
-      var hs = Object.keys(result.helicities).sort();
-      for (var i = 0; i < hs.length; i++) {
-        var h = hs[i];
-        var lsDict = result.helicities[h];
-        var lss = Object.keys(lsDict).sort();
-        
-        for (var j = 0; j < lss.length; j++) {
-          var ls = lss[j];
-          var c = lsDict[ls]; // {real, imag} complex number
-          
-          var latexExpr = complexToLatex(c);
-          
-          html += '<tr><td>(' + h + ')</td><td>(' + ls + ')</td><td><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></td></tr>';
+
+      var totalHelicities = 0;
+      for (var i = 0; i < results.length; i++) {
+        if (results[i].result) {
+          totalHelicities += Object.keys(results[i].result.helicities).length;
         }
       }
-      
-      html += '</tbody></table></div>';
-      
+
+      statusIndicator.className = 'status-indicator success';
+      var statusMsg = totalHelicities + ' helicity amplitude(s)';
+      if (batch) statusMsg += ' across ' + results.length + ' spin combination(s)';
+      statusText.textContent = statusMsg;
+
+      var html = '';
+      for (var i = 0; i < results.length; i++) {
+        var r = results[i];
+
+        if (batch) {
+          html += '<div class="batch-item" style="margin-bottom:1rem;';
+          if (i > 0) html += 'border-top:1px solid var(--border);padding-top:0.75rem;';
+          html += '">';
+          html += '<div style="font-size:0.8rem;font-weight:600;color:var(--accent);margin-bottom:0.5rem;">';
+          html += 'J(' + r.label + ')';
+          html += '</div>';
+        }
+
+        if (r.error) {
+          html += '<p style="color: var(--error); font-size: 0.85rem;">✗ ' + escapeHtml(r.error) + '</p>';
+        } else {
+          var nHel = Object.keys(r.result.helicities).length;
+          if (nHel === 0) {
+            html += '<p style="color: var(--text-muted); font-size: 0.85rem;">No valid helicity combinations.</p>';
+          } else {
+            html += '<table class="result-table"><thead><tr><th>λ</th><th>LS</th><th>T(φ,θ)</th></tr></thead><tbody>';
+            var hs = Object.keys(r.result.helicities).sort();
+            for (var hi = 0; hi < hs.length; hi++) {
+              var h = hs[hi];
+              var lsDict = r.result.helicities[h];
+              var lss = Object.keys(lsDict).sort();
+              for (var lj = 0; lj < lss.length; lj++) {
+                var ls = lss[lj];
+                var c = lsDict[ls];
+                var latexExpr = complexToLatex(c);
+                html += '<tr><td>(' + h + ')</td><td>(' + ls + ')</td><td><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></td></tr>';
+              }
+            }
+            html += '</tbody></table>';
+          }
+        }
+
+        if (batch) html += '</div>';
+      }
+
       resultsBody.innerHTML = html;
-      
+
       // Render LaTeX in cells
       if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
         var spans = resultsBody.querySelectorAll('.latex-cell');
