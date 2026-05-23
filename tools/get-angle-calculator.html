@@ -613,7 +613,7 @@ Selection rules:
       if (s === '0' || s === '') return s;
       // Surd.toString() patterns:
       // ±p*sqrt(r)/q  →  \frac{±p\sqrt{r}}{q}
-      s = s.replace(/(-?\d+)\*sqrt\((\d+)\)\/(\d+)/g, '\\frac{$1\\sqrt{$2}}{$3}');
+      s = s.replace(/(-?)(\d+)\*sqrt\((\d+)\)\/(\d+)/g, '$1\\frac{$2\\sqrt{$3}}{$4}');
       // ±sqrt(r)/q  →  \frac{\sqrt{r}}{q}
       s = s.replace(/(-?)sqrt\((\d+)\)\/(\d+)/g, '$1\\frac{\\sqrt{$2}}{$3}');
       // ±sqrt(r)  →  ±\sqrt{r}
@@ -621,7 +621,7 @@ Selection rules:
       // * → multiplication dot
       s = s.replace(/\*/g, '\\!\\cdot\\!');
       // Top-level N/D in coefficients (won't match trig args like theta_0/2)
-      s = s.replace(/(^|[+\-*\\!])(-?\d+)\/(\d+)/g, '$1\\frac{$2}{$3}');
+      s = s.replace(/(^|[+\-*\\!])(-?)(\d+)\/(\d+)/g, '$1$2\\frac{$3}{$4}');
       // Function names
       s = s.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
       s = s.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
