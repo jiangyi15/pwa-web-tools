@@ -155,11 +155,6 @@ function _getExactWignerDWeights(J, m1, m2) {
   var jpm1 = Math.round(J + m1), jmm1 = Math.round(J - m1);
   var jpm2 = Math.round(J + m2), jmm2 = Math.round(J - m2);
   
-  // Precompute factorials
-  var maxN = Math.max(jpm1, jmm1, jpm2, jmm2, twoJ + 2, 10);
-  var facts = [1];
-  for (var i = 1; i <= maxN; i++) facts[i] = facts[i-1] * i;
-  
   // Numerator under sqrt: (j+m1)!(j-m1)!(j+m2)!(j-m2)!
   var numNum = 1;
   for (var i = 1; i <= jpm1; i++) numNum *= i;
@@ -632,9 +627,11 @@ function _basisKey(basis) {
 
 function _pmToLatex(pm) {
   // pm is a phi multiplier: integer (1,2,3…) or half-integer (0.5, 1.5, …)
+  // Always non-negative in practice (from Math.abs(la) in _getOneHelicityStruct).
   if (Number.isInteger(pm)) return String(pm);
-  var n = Math.round(pm * 2);
-  return '\\frac{' + n + '}{2}';
+  var n = Math.abs(Math.round(pm * 2));
+  var sign = pm < 0 ? '-' : '';
+  return sign + '\\frac{' + n + '}{2}';
 }
 
 // --- TOP-LEVEL: structured formula computation ---
@@ -666,6 +663,8 @@ function getAngleFormulaSimplified(decayTree) {
   
   // Detect J=0 root decay: both child phi terms share the same exponent,
   // so we can fix φ₁=0 and rename φ₂→χ (one fewer azimuthal variable).
+  // Vertex ordering (DFS): idx 0=root, 1..c0size=child0's cascade, c0size+1..=child1's cascade.
+  // removeIdx=1 (first child's decay vertex), renameIdx=1+c0size (second child's first vertex).
   var phiCombine = null;
   if (nDecays >= 3 &&
       toSpin(vertices[0].Ja).value === 0 &&
