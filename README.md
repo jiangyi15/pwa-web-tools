@@ -1,3 +1,5 @@
+> **AI-Generated Project** — This project was developed through an interactive AI-assisted workflow using Opencode (Claude-based agent), iterating on physics tooling for hadron spectroscopy.
+
 # Partial Wave Analysis Tools
 
 A polished, modern static site with interactive calculators for quantum angular momentum coupling and particle decay kinematics. Built with pure HTML, CSS, and JavaScript — no frameworks, no build step, no server required.
