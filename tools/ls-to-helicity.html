@@ -245,7 +245,40 @@
                         <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase Jc">+</button>
                       </div>
                     </div>
+                </div>
+
+                <div class="input-section">
+                  <div class="input-section-title">Parities (optional)</div>
+                  <div class="qn-grid">
+                    <div class="form-group">
+                      <label class="form-label" for="Pa">P<sub>A</sub></label>
+                      <select id="Pa" class="form-input" style="text-align:center;padding:0.5rem 0.25rem;">
+                        <option value="0" selected>0</option>
+                        <option value="1">+1</option>
+                        <option value="-1">−1</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="Pb">P<sub>B</sub></label>
+                      <select id="Pb" class="form-input" style="text-align:center;padding:0.5rem 0.25rem;">
+                        <option value="0" selected>0</option>
+                        <option value="1">+1</option>
+                        <option value="-1">−1</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="Pc">P<sub>C</sub></label>
+                      <select id="Pc" class="form-input" style="text-align:center;padding:0.5rem 0.25rem;">
+                        <option value="0" selected>0</option>
+                        <option value="1">+1</option>
+                        <option value="-1">−1</option>
+                      </select>
+                    </div>
                   </div>
+                  <p class="form-hint" style="font-size:0.75rem;color:var(--text-muted);margin-top:0.25rem;">
+                    P<sub>A</sub> · P<sub>B</sub> · P<sub>C</sub> = (−1)<sup>l</sup>.
+                    Set to 0 to skip parity selection.
+                  </p>
                 </div>
 
                 <div class="btn-group" style="margin-top: 1rem;">
@@ -306,6 +339,7 @@ Selection rules:
 <ul style="margin-top:0.25rem;">
 <li>|J<sub>B</sub>−J<sub>C</sub>| ≤ s ≤ J<sub>B</sub>+J<sub>C</sub></li>
 <li>|l−s| ≤ J<sub>A</sub> ≤ l+s</li>
+<li>Parity: P<sub>A</sub> · P<sub>B</sub> · P<sub>C</sub> = (−1)<sup>l</sup> (if all three parities are set)</li>
 </ul>
             </div>
           </div>
@@ -402,24 +436,53 @@ Selection rules:
     // ===================================================================
     // CALCULATION — formula generation
     // ===================================================================
+    function getParities() {
+      return {
+        Pa: parseInt(document.getElementById('Pa').value, 10),
+        Pb: parseInt(document.getElementById('Pb').value, 10),
+        Pc: parseInt(document.getElementById('Pc').value, 10)
+      };
+    }
+
+    function filterLSByParity(pairs, Pa, Pb, Pc) {
+      if (Pa === 0 || Pb === 0 || Pc === 0) return pairs;
+      var product = Pa * Pb * Pc;
+      // P_A · P_B · P_C = (-1)^l  →  product=1 ⇒ l even, product=-1 ⇒ l odd
+      return pairs.filter(function(p) {
+        if (product === 1) return p.l % 2 === 0;
+        if (product === -1) return p.l % 2 === 1;
+        return true;
+      });
+    }
+
     function calculate() {
       var spins = getSpins();
       var Ja_val = spins.Ja.value;
       var Jb_val = spins.Jb.value;
       var Jc_val = spins.Jc.value;
 
+      var parities = getParities();
+
       var statusIndicator = document.getElementById('status-indicator');
       var statusText = document.getElementById('status-text');
       var resultsBody = document.getElementById('results-body');
 
-      // Get LS pairs
-      var lsPairs = getLSCombinations(Ja_val, Jb_val, Jc_val);
+      // Get LS pairs and apply parity filter
+      var lsPairsAll = getLSCombinations(Ja_val, Jb_val, Jc_val);
+      var lsPairs = filterLSByParity(lsPairsAll, parities.Pa, parities.Pb, parities.Pc);
+
       if (lsPairs.length === 0) {
+        var msg = lsPairsAll.length > 0
+          ? 'No LS pairs survive the parity selection rule. All were filtered out.'
+          : 'No valid (l,s) pairs for these spins.';
         statusIndicator.className = 'status-indicator error';
         statusText.textContent = 'No valid LS combinations';
-        resultsBody.innerHTML = '<p style="color: var(--text-muted);">No valid (l,s) pairs for these spins.</p>';
+        resultsBody.innerHTML = '<p style="color: var(--text-muted);">' + msg + '</p>';
         return;
       }
+
+      // Track how many were filtered
+      var nFiltered = lsPairsAll.length - lsPairs.length;
 
       // Get helicity pairs
       var helicitiesB = getHelicities(Jb_val);
@@ -540,7 +603,19 @@ Selection rules:
           }
 
           // Render results — just the equations
-          var html = '<div class="result-section">';
+          var html = '';
+
+          // Parity filter note
+          if (nFiltered > 0) {
+            var Pa = parities.Pa, Pb = parities.Pb, Pc = parities.Pc;
+            html += '<div class="parity-note" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-sm);padding:0.5rem 0.75rem;margin-bottom:0.75rem;font-size:0.8rem;color:var(--text-secondary);">';
+            html += 'Parity filter applied: P<sub>A</sub>=' + Pa + ', P<sub>B</sub>=' + Pb + ', P<sub>C</sub>=' + Pc;
+            html += ' &rarr; product = ' + (Pa*Pb*Pc) + ' = (−1)<sup>l</sup>';
+            html += ' &rarr; ' + nFiltered + ' LS pair(s) removed.';
+            html += '</div>';
+          }
+
+          html += '<div class="result-section">';
           html += '<h4>Helicity Amplitudes (' + hResults.length + ')</h4>';
 
           for (var i = 0; i < hResults.length; i++) {
@@ -555,7 +630,9 @@ Selection rules:
 
           resultsBody.innerHTML = html;
           statusIndicator.className = 'status-indicator success';
-          statusText.textContent = hResults.length + ' helicity amplitude formula(s)';
+          var statusMsg = hResults.length + ' helicity amplitude formula(s)';
+          if (nFiltered > 0) statusMsg += ' (' + nFiltered + ' LS pairs filtered by parity)';
+          statusText.textContent = statusMsg;
 
           // Typeset
           if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
