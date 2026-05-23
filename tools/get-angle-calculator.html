@@ -582,6 +582,16 @@ Selection rules:
       return label;
     }
 
+    function pathLatex(path) {
+      if (path.length === 0) return 'A';
+      if (path.length === 1) return path[0] === 0 ? 'B' : 'C';
+      var label = path[0] === 0 ? 'B' : 'C';
+      for (var i = 1; i < path.length; i++) {
+        label += '_{' + (path[i] + 1) + '}';
+      }
+      return label;
+    }
+
     function applyCombination(baseTree, combination) {
       var t = cloneTree(baseTree);
       for (var i = 0; i < combination.length; i++) {
@@ -611,6 +621,21 @@ Selection rules:
       return parts.join(', ');
     }
 
+    function formatSpinLatex(j) {
+      if (Math.abs(j - 0.5) < 1e-10) return '\\frac{1}{2}';
+      if (Math.abs(j - 1.5) < 1e-10) return '\\frac{3}{2}';
+      return String(Math.round(j));
+    }
+
+    function buildCombinationLatexLabel(combination) {
+      var parts = [];
+      for (var i = 0; i < combination.length; i++) {
+        var c = combination[i];
+        parts.push(pathLatex(c.path) + '=' + formatSpinLatex(c.value));
+      }
+      return 'J(' + parts.join(',\\ ') + ')';
+    }
+
     function calculate() {
       if (!decayTree.children) {
         showError('Root particle must decay. Click "Final" to make it decay.');
@@ -635,7 +660,8 @@ Selection rules:
         for (var bi = 0; bi < combos.length; bi++) {
           batchTrees.push({
             tree: applyCombination(decayTree, combos[bi]),
-            label: buildCombinationLabel(combos[bi])
+            label: buildCombinationLabel(combos[bi]),
+            latexLabel: buildCombinationLatexLabel(combos[bi])
           });
         }
         if (batchTrees.length === 0) {
@@ -643,7 +669,7 @@ Selection rules:
           return;
         }
       } else {
-        batchTrees.push({ tree: decayTree, label: '' });
+        batchTrees.push({ tree: decayTree, label: '', latexLabel: '' });
       }
 
       setTimeout(function() {
@@ -655,14 +681,14 @@ Selection rules:
             try {
               var result = getAngleFormulaSimplified(batchTrees[bi].tree);
               if (result && !result.error) {
-                results.push({ label: batchTrees[bi].label, result: result, error: null });
+                results.push({ label: batchTrees[bi].label, latexLabel: batchTrees[bi].latexLabel, result: result, error: null });
                 nOk++;
               } else {
-                results.push({ label: batchTrees[bi].label, result: null, error: result ? result.error : 'Unknown error' });
+                results.push({ label: batchTrees[bi].label, latexLabel: batchTrees[bi].latexLabel, result: null, error: result ? result.error : 'Unknown error' });
                 nErr++;
               }
             } catch (e) {
-              results.push({ label: batchTrees[bi].label, result: null, error: e.message || 'Computation error' });
+              results.push({ label: batchTrees[bi].label, latexLabel: batchTrees[bi].latexLabel, result: null, error: e.message || 'Computation error' });
               nErr++;
             }
           }
@@ -820,7 +846,7 @@ Selection rules:
         if (r.error || !r.result) continue;
 
         if (batch) {
-          lines.push('\\subsection*{' + r.label.replace(/</g, '\\textless ').replace(/>/g, '\\textgreater ') + '}');
+          lines.push('\\subsection*{$' + r.latexLabel + '$}');
         }
 
         var hs = Object.keys(r.result.helicities).sort();
