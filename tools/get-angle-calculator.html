@@ -584,18 +584,9 @@ Selection rules:
     }
     
     function complexToLatex(c) {
+      // formulas from getAngleFormulaSimplified are already LaTeX
       var realPart = c.real;
       var imagPart = c.imag;
-      
-      // Convert coefficient expression to LaTeX
-      // Expressions from the struct pipeline are already clean — no CAS needed
-      realPart = _strToLatex(realPart);
-      
-      if (imagPart === '0' || imagPart === '') {
-        return realPart;
-      }
-      
-      imagPart = _strToLatex(imagPart);
       
       if (imagPart === '0' || imagPart === '') {
         return realPart;
@@ -606,21 +597,6 @@ Selection rules:
       }
       
       return realPart + ' + i(' + imagPart + ')';
-    }
-    
-    // Convert plaintext math expression to LaTeX
-    function _strToLatex(s) {
-      if (s === '0' || s === '') return s;
-      // Coefficients are already LaTeX from SurdSum.toLatex().
-      // Only convert trig names and plain math markup.
-      // * → multiplication dot
-      s = s.replace(/\*/g, '\\!\\cdot\\!');
-      // Top-level N/D in coefficients (won't match trig args like theta_0/2)
-      s = s.replace(/(^|[+\-*\\!])(-?)(\d+)\/(\d+)/g, '$1$2\\frac{$3}{$4}');
-      // Function names
-      s = s.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
-      s = s.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
-      return s;
     }
 
     function showError(msg) {

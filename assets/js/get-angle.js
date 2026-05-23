@@ -668,22 +668,18 @@ function getAngleFormulaSimplified(decayTree) {
     phiCombine = { removeIdx: 1, renameIdx: 1 + c0size };
   }
   
-  // Track phi and theta display names (adjusted for J=0 combination)
-  var phiNamesMap = [], thetaNamesMap = [];
+  // LaTeX names for phi and theta (built directly from structure)
+  var phiLatexNames = [], thetaLatexNames = [];
   for (var i = 0; i < nDecays; i++) {
     if (phiCombine && i === phiCombine.removeIdx) {
-      phiNamesMap[i] = '0';           // fixed to zero
+      phiLatexNames[i] = '0';           // fixed to zero (not used after filtering)
     } else if (phiCombine && i === phiCombine.renameIdx) {
-      phiNamesMap[i] = 'chi';         // internal temp name
+      // Wrapping parens so pm multiplier works on the whole sum, e.g. cos(2(φ₁+φ₂))
+      phiLatexNames[i] = '(\\phi_{' + phiCombine.removeIdx + '}+\\phi_{' + phiCombine.renameIdx + '})';
     } else {
-      phiNamesMap[i] = 'phi_' + i;
+      phiLatexNames[i] = '\\phi_{' + i + '}';
     }
-    thetaNamesMap[i] = 'theta_' + i;
-  }
-  
-  var algebriteThetaNames = [];
-  for (var i = 0; i < nDecays; i++) {
-    algebriteThetaNames[i] = 'theta_' + i;
+    thetaLatexNames[i] = '\\theta_{' + i + '}';
   }
   
   for (var fullH in rawStructured) {
@@ -757,25 +753,38 @@ function getAngleFormulaSimplified(decayTree) {
           for (var ti = 0; ti < grp.thetaBasis.length; ti++) {
             var tb = grp.thetaBasis[ti];
             if (tb.func === '1' || tb.k === 0) continue;
-            var tn = algebriteThetaNames[tb.idx];
+            var tn = thetaLatexNames[tb.idx];
             var arg;
-            if (tb.k === 1) { arg = tn + '/2'; }
-            else if (tb.k % 2 === 0) { var m = tb.k/2; arg = (m===1?'':m+'*') + tn; }
-            else { arg = '(' + tb.k + '/2)*' + tn; }
-            trigParts.push(tb.func + '(' + arg + ')');
+            if (tb.k === 1) {
+              arg = '\\frac{' + tn + '}{2}';
+            } else if (tb.k % 2 === 0) {
+              var m = tb.k / 2;
+              arg = (m === 1 ? '' : String(m)) + tn;
+            } else {
+              arg = '\\frac{' + tb.k + '}{2}' + tn;
+            }
+            trigParts.push('\\' + tb.func + '(' + arg + ')');
           }
           
           for (var pi = 0; pi < grp.phiBasis.length; pi++) {
             var pb = grp.phiBasis[pi];
-            var pn = phiNamesMap[pb.idx] || 'phi_' + pb.idx;
-            if (pb.pm && pb.pm !== 1) { trigParts.push(pb.pf + '(' + pb.pm + '*' + pn + ')'); }
-            else { trigParts.push(pb.pf + '(' + pn + ')'); }
+            var pn = phiLatexNames[pb.idx];
+            if (pb.pm && pb.pm !== 1) {
+              trigParts.push('\\' + pb.pf + '(' + pb.pm + pn + ')');
+            } else {
+              // Strip wrapping parens for pm=1 (combined J=0 name needs them for pm≠1)
+              var name = pn;
+              if (name.charAt(0) === '(' && name.charAt(name.length - 1) === ')') {
+                name = name.substring(1, name.length - 1);
+              }
+              trigParts.push('\\' + pb.pf + '(' + name + ')');
+            }
           }
           
-          // Build complete term
+          // Build complete term (all parts already LaTeX)
           var termExpr = coeffStr;
           if (trigParts.length > 0) {
-            termExpr = termExpr + '*' + trigParts.join('*');
+            termExpr = termExpr + '\\!\\cdot\\!' + trigParts.join('\\!\\cdot\\!');
           }
           
           if (grp.im) imagStrs.push(termExpr);
@@ -793,20 +802,6 @@ function getAngleFormulaSimplified(decayTree) {
         } else {
           imagExpr = imagStrs.join('+').replace(/\+\-/g,'-');
           if (imagExpr[0] === '+') imagExpr = imagExpr.substring(1);
-        }
-        
-        // J=0 display: replace internal chi → explicit sum (phi_remove+phi_rename)
-        if (phiCombine) {
-          var chiPat = 'chi';
-          var chiDisp = '(phi_' + phiCombine.removeIdx + '+phi_' + phiCombine.renameIdx + ')';
-          if (realExpr.indexOf(chiPat) !== -1) realExpr = realExpr.split(chiPat).join(chiDisp);
-          if (imagExpr.indexOf(chiPat) !== -1) imagExpr = imagExpr.split(chiPat).join(chiDisp);
-          // Strip duplicate parens when sum sits directly inside a trig call (pm=1 case)
-          // e.g. cos((phi_1+phi_2)) → cos(phi_1+phi_2), but keep cos(2*(phi_1+phi_2))
-          var dup = '((phi_' + phiCombine.removeIdx + '+phi_' + phiCombine.renameIdx + '))';
-          var single = '(phi_' + phiCombine.removeIdx + '+phi_' + phiCombine.renameIdx + ')';
-          if (realExpr.indexOf(dup) !== -1) realExpr = realExpr.split(dup).join(single);
-          if (imagExpr.indexOf(dup) !== -1) imagExpr = imagExpr.split(dup).join(single);
         }
         
         result[fullH][fullLs] = {
