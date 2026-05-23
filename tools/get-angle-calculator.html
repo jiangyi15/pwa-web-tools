@@ -541,7 +541,7 @@ Selection rules:
       statusText.textContent = 'Found ' + nHelicities + ' helicity combination(s)';
       
       // Build results table
-      var html = '<div class="result-item"><div class="result-label">Angles: ' + result.angles.join('; ') + '</div></div>';
+      var html = '<div class="result-item"><div class="result-label">Angles: ' + result.angles.map(function(a) { return '\\(' + a + '\\)'; }).join('; ') + '</div></div>';
       html += '<div class="result-item"><div class="result-label">Angular Formulas</div>';
       html += '<table class="result-table"><thead><tr><th>λ</th><th>LS</th><th>T(φ,θ)</th></tr></thead><tbody>';
       
@@ -618,6 +618,7 @@ Selection rules:
       // Function names
       s = s.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
       s = s.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
+      s = s.replace(/(?<!\\)chi/g, '\\chi');
       return s;
     }
 

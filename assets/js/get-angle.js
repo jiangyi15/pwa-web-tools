@@ -804,13 +804,15 @@ function getAngleFormulaSimplified(decayTree) {
     }
   }
   
-  // Build angle list
+  // Build angle list (LaTeX names)
   var angles = [];
   for (var i = 0; i < nDecays; i++) {
     if (phiCombine && i === phiCombine.removeIdx) {
-      angles.push(thetaNamesMap[i]);  // only theta (phi fixed to 0)
+      angles.push('\\theta_' + i);             // only theta (phi fixed to 0)
+    } else if (phiCombine && i === phiCombine.renameIdx) {
+      angles.push('\\chi, \\theta_' + i);      // renamed to chi
     } else {
-      angles.push(phiNamesMap[i] + ', ' + thetaNamesMap[i]);
+      angles.push('\\phi_' + i + ', \\theta_' + i);
     }
   }
   
