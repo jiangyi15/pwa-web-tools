@@ -464,95 +464,84 @@ function _factorials(n) {
 }
 
 // ============================================================================
-// HALF-ANGLE EXPANSION TABLES
+// HALF-ANGLE EXPANSION — exact symbolic formula
 // ============================================================================
 
 /**
- * Pre-computed expansion of sin^b(θ/2) * cos^c(θ/2) into
- * basis of {1, cos(kθ/2), sin(kθ/2)} for k=1..(b+c).
- * Each entry: { coeff, func: "cos"|"sin"|"1", k }
- * k=0 means constant (func="1"), k>0 is the multiplier of θ/2.
+ * Integer GCD for reducing fractions.
  */
-var _halfAngleTable = {
-  '0,0': [ {s:'1', f:'1', k:0} ],
-  '0,1': [ {s:'1', f:'cos', k:1} ],
-  '1,0': [ {s:'1', f:'sin', k:1} ],
-  '0,2': [ {s:'1/2', f:'1', k:0},  {s:'1/2', f:'cos', k:2} ],
-  '1,1': [ {s:'1/2', f:'sin', k:2} ],
-  '2,0': [ {s:'1/2', f:'1', k:0},  {s:'-1/2', f:'cos', k:2} ],
-  '0,3': [ {s:'3/4', f:'cos', k:1}, {s:'1/4', f:'cos', k:3} ],
-  '1,2': [ {s:'1/4', f:'sin', k:1}, {s:'1/4', f:'sin', k:3} ],
-  '2,1': [ {s:'1/4', f:'sin', k:1}, {s:'-1/4', f:'sin', k:3} ],
-  '3,0': [ {s:'3/4', f:'sin', k:1}, {s:'-1/4', f:'sin', k:3} ],
-  '0,4': [ {s:'3/8', f:'1', k:0}, {s:'1/2',  f:'cos', k:2}, {s:'1/8', f:'cos', k:4} ],
-  '1,3': [ {s:'1/4', f:'sin', k:2}, {s:'1/8', f:'sin', k:4} ],
-  '2,2': [ {s:'1/8', f:'1', k:0}, {s:'-1/8', f:'cos', k:4} ],
-  '3,1': [ {s:'1/4', f:'sin', k:2}, {s:'-1/8', f:'sin', k:4} ],
-  '4,0': [ {s:'3/8', f:'1', k:0}, {s:'-1/2', f:'cos', k:2}, {s:'1/8', f:'cos', k:4} ],
-};
-
-/**
- * Expand sin^b(θ/2) * cos^c(θ/2) into basis functions.
- * Returns array of {coeff: number, func: "cos"|"sin"|"1", k: number}
- * Uses precomputed table for small powers (up to b+c=6), 
- * falls back to binomial computation for higher powers.
- */
-function expandHalfAngleBasis(sinPow, cosPow) {
-  var key = sinPow + ',' + cosPow;
-  if (_halfAngleTable[key]) {
-    return _halfAngleTable[key].map(function(e) {
-      return { s: e.s, func: e.f, k: e.k };
-    });
-  }
-  return _computeHalfAngleBasis(sinPow, cosPow);
+function _intGcd(a, b) {
+  a = Math.abs(a); b = Math.abs(b);
+  while (b) { var t = b; b = a % b; a = t; }
+  return a;
 }
 
-function _computeHalfAngleBasis(sinPow, cosPow) {
-  // Binomial expansion fallback for high powers
-  var b = sinPow, c = cosPow, N = b + c;
-  var denom = Math.pow(2, N);
-  
-  // Compute e^{imx} coefficients
-  var eCoeffs = {};
-  var binomFacts = _factorials(N);
-  for (var j = 0; j <= b; j++) {
-    for (var vk = 0; vk <= c; vk++) {
-      var m = N - 2*j - 2*vk;
-      var sign = (j % 2 === 0) ? 1 : -1;
-      var coeff = sign * _binom(b, j, binomFacts) * _binom(c, vk, binomFacts);
-      eCoeffs['m' + m] = (eCoeffs['m' + m] || 0) + coeff;
-    }
-  }
-  
-  // Determine basis type and extra sign from i^b
-  var extraSign = 1;
-  if (b % 4 === 2 || b % 4 === 3) extraSign = -1;
-  
-  var isSine = (b % 2 === 1);
-  
+/**
+ * Format integer fraction as Algebrite-compatible string.
+ */
+function _fracStr(num, den) {
+  if (den < 0) { num = -num; den = -den; }
+  if (num === 0) return '0';
+  var g = _intGcd(Math.abs(num), den);
+  num /= g; den /= g;
+  if (den === 1) return num === 1 ? '1' : String(num);
+  return num + '/' + den;
+}
+
+/**
+ * Expand sin^a(θ/2) * cos^b(θ/2) into exact {cos(kθ/2), sin(kθ/2), 1} basis.
+ *
+ * Uses the closed-form Fourier expansion derived from Euler's formula:
+ *
+ *   sin^a(θ/2) cos^b(θ/2) = δ_{a,even}·s₀/2^N
+ *     + Σ_{m} s_m/2^{N-1} · {cos|sin}(mθ/2)
+ *
+ * where N = a+b, s_m = Σ_{p+q=(N+m)/2} binom(a,p) binom(b,q) (-1)^{a-p},
+ * and the cos/sin choice and sign follow from the factor 1/i^a:
+ *
+ *   a mod 4 = 0 → +cos,   a mod 4 = 1 → +sin,
+ *   a mod 4 = 2 → −cos,   a mod 4 = 3 → −sin
+ *
+ * All coefficients are exact rational strings — no floats.
+ *
+ * @param {number} sinPow - exponent of sin(θ/2)
+ * @param {number} cosPow - exponent of cos(θ/2)
+ * @returns {Array<{s: string, func: string, k: number}>}
+ */
+function expandHalfAngleBasis(sinPow, cosPow) {
+  var a = sinPow, b = cosPow, N = a + b;
+  var facts = _factorials(N);
   var result = [];
-  for (var m = 0; m <= N; m += 2) {
-    var coeff;
-    if (m === 0) {
-      coeff = (eCoeffs['m0'] || 0) / denom * extraSign;
-    } else {
-      var cp = eCoeffs['m' + m] || 0;
-      var cm = eCoeffs['m' + (-m)] || 0;
-      if (isSine) {
-        coeff = (cp - cm) / denom * extraSign * (b % 4 === 1 ? 1 : -1);
-      } else {
-        coeff = (cp + cm) / denom * extraSign;
-      }
+  var aMod4 = a % 4;
+  
+  // Iterate over m with same parity as N
+  for (var m = (N % 2); m <= N; m += 2) {
+    var r = (N + m) / 2;
+    // Compute s_m = sum over p+q=r
+    var sm = 0;
+    var pMin = Math.max(0, r - b);
+    var pMax = Math.min(a, r);
+    for (var p = pMin; p <= pMax; p++) {
+      var q = r - p;
+      sm += ((a - p) % 2 === 0 ? 1 : -1)
+          * _binom(a, p, facts)
+          * _binom(b, q, facts);
     }
+    if (sm === 0) continue;
     
-    if (Math.abs(coeff) < 1e-14) continue;
-    
-    result.push({
-      coeff: coeff,
-      func: m === 0 ? '1' : (isSine ? 'sin' : 'cos'),
-      k: m,
-      halfAngle: true
-    });
+    if (m === 0) {
+      // Constant term: exists only for even a (odd a gives s₀=0)
+      if (a % 2 !== 0) continue;
+      var constSign = (aMod4 === 0) ? 1 : -1;
+      result.push({ s: _fracStr(constSign * sm, Math.pow(2, N)),
+                    func: '1', k: 0 });
+    } else {
+      // Fourier mode: cos if a even, sin if a odd
+      var func = (a % 2 === 0) ? 'cos' : 'sin';
+      var fourierSign = (aMod4 === 0 || aMod4 === 1) ? 1 : -1;
+      result.push({ s: _fracStr(fourierSign * sm, Math.pow(2, N - 1)),
+                    func: func, k: m });
+    }
   }
   
   return result;
