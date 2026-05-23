@@ -333,20 +333,22 @@ Selection rules:
       container.innerHTML = '';
       nodeId = 0;
       var angleIdx = { v: 0 };
-      container.appendChild(renderNode(decayTree, 'Parent', [], angleIdx));
+      var nameMap = buildPathNameMap(decayTree);
+      container.appendChild(renderNode(decayTree, 'Parent', [], angleIdx, nameMap));
     }
 
-    function renderNode(node, label, path, angleIdx) {
+    function renderNode(node, label, path, angleIdx, nameMap) {
       var div = document.createElement('div');
       div.className = 'tree-node';
       
       var content = document.createElement('div');
       content.className = 'node-content';
       
-      // Label
+      // Label with particle name
       var labelEl = document.createElement('span');
       labelEl.className = 'node-label';
-      labelEl.textContent = label;
+      var name = nameMap[path.join(',')] || '';
+      labelEl.textContent = name ? name + ' (' + label + ')' : label;
       content.appendChild(labelEl);
       
       // J= input
@@ -406,8 +408,8 @@ Selection rules:
       
       // Render children
       if (node.children) {
-        var child0Div = renderNode(node.children[0], 'Child 1', path.concat(0), angleIdx);
-        var child1Div = renderNode(node.children[1], 'Child 2', path.concat(1), angleIdx);
+        var child0Div = renderNode(node.children[0], 'Child 1', path.concat(0), angleIdx, nameMap);
+        var child1Div = renderNode(node.children[1], 'Child 2', path.concat(1), angleIdx, nameMap);
         div.appendChild(child0Div);
         div.appendChild(child1Div);
       }
