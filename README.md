@@ -1,47 +1,25 @@
 # Partial Wave Analysis Tools
 
-A polished, modern static site with interactive calculators for quantum angular momentum coupling. Built with pure HTML, CSS, and JavaScript — no frameworks, no build step, no server required.
-
-## Features
-
-- **Clebsch-Gordan Coefficient Calculator**: Compute ⟨j₁ m₁ j₂ m₂ | J M⟩ coupling coefficients using the Racah formula
-- **Symbolic Computation**: Powered by [Algebrite](http://algebrite.org/) for exact symbolic results
-- **Half-Integer Support**: Accepts fractions like "1/2", "3/2" and decimals like "0.5", "1.5"
-- **Symbolic Output**: Results displayed in exact form (e.g., `1/sqrt(2)`, `sqrt(2/3)`) plus decimal approximation
-- **Selection Rule Validation**: Automatic checking of quantum number constraints
-- **Offline-First**: Works completely offline via `file://` protocol
-- **Responsive Design**: Mobile-first, works beautifully on all screen sizes
+A polished, modern static site with interactive calculators for quantum angular momentum coupling and particle decay kinematics. Built with pure HTML, CSS, and JavaScript — no frameworks, no build step, no server required.
 
 ## Tools
 
-| Tool | Status | Description |
-|------|--------|-------------|
-| **Clebsch-Gordan Calculator** | ✅ Available | Angular momentum coupling coefficients |
+| Tool | Description |
+|------|-------------|
+| **Angular Formula Calculator** | Compute angular formulas for particle decay chains using helicity formalism. Supports cascade decays with exact symbolic computation of Wigner D-functions and CG coefficients. |
+| **LS → Helicity Converter** | Express helicity amplitude coefficients H<sub>λ<sub>B</sub>,λ<sub>C</sub></sub> in terms of LS coupling amplitudes g<sub>l,s</sub> with exact Clebsch-Gordan coefficients. Includes parity selection (P<sub>A</sub>·P<sub>B</sub>·P<sub>C</sub> = (−1)<sup>l</sup>). |
+| **Clebsch-Gordan Coefficient Calculator** | Compute ⟨j₁ m₁ j₂ m₂ | J M⟩ coupling coefficients using the Racah formula with exact symbolic surd arithmetic. |
+| **Wigner d-Matrix Calculator** | Compute Wigner small d-matrix elements d<sup>j</sup><sub>m₁,m₂</sub>(β) using exact symbolic computation. Supports single elements and full matrix display. |
 
 ## Setup
 
-Third-party libraries (Algebrite, KaTeX + fonts) are **not** committed to the
-repo. Fetch them once with:
+No third-party vendor dependencies needed. All computation uses pure JavaScript with BigInt arithmetic.
+
+For LaTeX rendering, MathJax is loaded from CDN:
 
 ```bash
-# Algebrite (symbolic math)
-mkdir -p assets/vendor
-curl -L -o assets/vendor/algebrite.bundle-for-browser.js \
-  https://cdn.jsdelivr.net/npm/algebrite@1.4.0/dist/algebrite.bundle-for-browser.js
-
-# KaTeX (LaTeX rendering)
-mkdir -p assets/vendor/katex/fonts
-curl -L -o assets/vendor/katex/katex.min.js  https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js
-curl -L -o assets/vendor/katex/katex.min.css https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css
-for f in KaTeX_AMS-Regular KaTeX_Caligraphic-Bold KaTeX_Caligraphic-Regular \
-         KaTeX_Fraktur-Bold KaTeX_Fraktur-Regular KaTeX_Main-Bold KaTeX_Main-BoldItalic \
-         KaTeX_Main-Italic KaTeX_Main-Regular KaTeX_Math-BoldItalic KaTeX_Math-Italic \
-         KaTeX_SansSerif-Bold KaTeX_SansSerif-Italic KaTeX_SansSerif-Regular \
-         KaTeX_Script-Regular KaTeX_Size1-Regular KaTeX_Size2-Regular KaTeX_Size3-Regular \
-         KaTeX_Size4-Regular KaTeX_Typewriter-Regular; do
-  curl -sL -o "assets/vendor/katex/fonts/$f.woff2" \
-    "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/$f.woff2"
-done
+# No setup required — MathJax loads from jsDelivr CDN at runtime
+# Works offline upon first cache
 ```
 
 ## Usage
@@ -52,7 +30,7 @@ Simply open `index.html` in your browser — no server needed:
 
 ```bash
 # Clone or download the repo
-cd physics-toolkit
+cd pwa-tools
 
 # Open in browser
 open index.html  # macOS
@@ -60,7 +38,7 @@ xdg-open index.html  # Linux
 start index.html  # Windows
 ```
 
-Or use a simple HTTP server:
+Or use a simple HTTP server (required for MathJax CDN to load):
 
 ```bash
 # Python 3
@@ -83,85 +61,48 @@ npx serve .
 
 The `.nojekyll` file ensures GitHub Pages serves the `assets/` directory without Jekyll processing.
 
-## Clebsch-Gordan Calculator
-
-The calculator implements the Racah formula:
-
-```
-⟨j₁ m₁ j₂ m₂ | J M⟩ = δ(m₁+m₂, M) · √((2J+1) · Δ(j₁,j₂,J)) ·
-  √((j₁+m₁)!(j₁-m₁)!(j₂+m₂)!(j₂-m₂)!(J+M)!(J-M)!) ·
-  Σₖ (-1)ᵏ / [k! (j₁+j₂-J-k)! (j₁-m₁-k)! (j₂+m₂-k)! (J-j₂+m₁+k)! (J-j₁-m₂+k)!]
-```
-
-where Δ(a,b,c) = (a+b-c)!(a-b+c)!(-a+b+c)! / (a+b+c+1)! is the triangle coefficient.
-
-### Selection Rules
-
-The coefficient is zero if any of these conditions are violated:
-
-- **Projection conservation**: m₁ + m₂ = M
-- **Triangle inequality**: |j₁ − j₂| ≤ J ≤ j₁ + j₂
-- **Magnitude constraints**: |m₁| ≤ j₁, |m₂| ≤ j₂, |M| ≤ J
-- **Quantum consistency**: j±m must be non-negative integers
-
-### Input Formats
-
-The calculator accepts several input formats:
-
-| Format | Examples | Notes |
-|--------|----------|-------|
-| Fraction | `1/2`, `3/2`, `-1/2` | Exact half-integers |
-| Decimal | `0.5`, `1.5`, `-0.5` | Converted to fractions internally |
-| Integer | `0`, `1`, `2`, `-1` | Standard integer values |
-
-### Examples
-
-Try these well-known coefficients:
-
-- ⟨½ ½ ½ −½ | 1 0⟩ = 1/√2 ≈ 0.707...
-- ⟨1 0 1 0 | 2 0⟩ = √(2/3) ≈ 0.816...
-- ⟨1 1 1 −1 | 0 0⟩ = 1/√3 ≈ 0.577...
-- ⟨1 0 1 0 | 0 0⟩ = −1/√3 ≈ −0.577...
-
 ## Technical Details
 
-### Symbolic Computation with Algebrite
+### Symbolic Computation with Surd.js
 
-The calculator uses [Algebrite](http://algebrite.org/) — a pure JavaScript computer algebra system — for exact symbolic computation:
+All calculators use a custom `Surd` arithmetic library for exact symbolic computation:
 
-1. Parse inputs to exact fractions (integers or half-integers)
-2. Build the Racah formula expression as an Algebrite-compatible string
-3. Compute the sum over k for all valid terms
-4. Simplify the result symbolically using Algebrite's `simplify()`
-5. Display the exact symbolic form and decimal approximation via `float()`
+- **Surd** — exact representation of `sign × p × √r / q` where p, q, r are non-negative integers
+- **SurdSum** — sum of Surd terms for representing combined coefficients
+- Pure BigInt arithmetic with gcd reduction — no floating-point error
+- CG coefficients computed via the Racah formula using exact integer factorials
+- Wigner d-matrix elements computed via half-angle Fourier expansion with exact binomial coefficients
 
-This approach provides mathematically exact results (e.g., `1/sqrt(2)`) rather than floating-point approximations, while handling arbitrarily complex expressions.
+### Helicity Amplitude Pipeline
 
-### Console Tests
+The Angular Formula calculator combines:
 
-Open the browser console on the calculator page to see automatic sanity checks:
+1. **CG coefficients** from `cg.js` — exact Clebsch-Gordan coefficients
+2. **Wigner d-matrix** from `wigner-d.js` — half-angle expansions of d<sup>j</sup><sub>m₁,m₂</sub>(β)
+3. **LS coupling** from `get-angle.js` — conversion between LS and helicity bases with parity selection
 
-```javascript
-runSanityChecks();  // Re-run tests
-```
+All coefficients are combined via `Surd` arithmetic, producing LaTeX output directly from the internal SurdSum representation — no string parsing, no regex post-processing.
 
 ## Project Structure
 
 ```
-physics-toolkit/
-├── index.html              # Landing page
-├── tools/
-│   └── cg-calculator.html  # CG coefficient calculator
+pwa-tools/
+├── index.html                  # Landing page with tool cards
+├── .nojekyll                   # Disable Jekyll on GitHub Pages
 ├── assets/
 │   ├── css/
-│   │   └── style.css       # All styles (dark theme)
-│   ├── js/
-│   │   ├── cg.js           # CG coefficient math (Algebrite)
-│   │   └── main.js         # UI helpers
-│   └── vendor/
-│       └── algebrite.bundle-for-browser.js  # Algebrite CAS library
-├── .nojekyll               # Disable Jekyll on GitHub Pages
-└── README.md               # This file
+│   │   └── style.css           # All styles (dark theme, responsive)
+│   └── js/
+│       ├── surd.js             # Exact surd arithmetic (Surd, SurdSum)
+│       ├── cg.js               # Clebsch-Gordan coefficients
+│       ├── wigner-d.js         # Wigner d-matrix computation
+│       └── get-angle.js        # Helicity amplitude formulas
+├── tools/
+│   ├── get-angle-calculator.html   # Angular Formula Calculator
+│   ├── ls-to-helicity.html         # LS → Helicity Converter
+│   ├── cg-calculator.html          # CG Coefficient Calculator
+│   └── wigner-d-calculator.html    # Wigner d-Matrix Calculator
+└── README.md                   # This file
 ```
 
 ## Browser Support
@@ -177,10 +118,6 @@ Requires BigInt support (ES2020+).
 
 MIT License — feel free to use, modify, and distribute.
 
-## Acknowledgments
-
-- **[Algebrite](http://algebrite.org/)** — Symbolic computation powered by this excellent pure-JavaScript computer algebra system. Algebrite is released under the MIT License.
-
 ## Contributing
 
 Contributions welcome! Ideas for future tools:
@@ -189,7 +126,8 @@ Contributions welcome! Ideas for future tools:
 - Racah coefficients
 - Angular momentum eigenvalue problems
 - Spherical tensor operators
+- Decay width / Dalitz plot analysis
 
 ---
 
-Built with care for the physics community. ⚛️
+Built with care for the hadron spectroscopy community. ⚛️
