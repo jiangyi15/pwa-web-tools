@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Interactive 3D visualization of particle decay angles in the helicity formalism.">
+  <title>Decay Angles 3D Viewer | Partial Wave Analysis Tools</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    /* ── Layout ── */
+    .viewer-layout {
+      display: flex;
+      gap: 0;
+      height: calc(100vh - 62px);
+      overflow: hidden;
+    }
+    .viewer-sidebar {
+      width: 320px;
+      min-width: 320px;
+      overflow-y: auto;
+      background: var(--bg-card);
+      border-right: 1px solid var(--border);
+      padding: 1rem;
+    }
+    .viewer-sidebar::-webkit-scrollbar { width: 4px; }
+    .viewer-sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .viewer-sidebar::-webkit-scrollbar-track { background: transparent; }
+    .viewer-viewport {
+      flex: 1;
+      position: relative;
+      background: var(--bg-primary);
+      overflow: hidden;
+    }
+    .viewer-viewport canvas { display: block; }
+    #label-renderer {
+      position: absolute;
+      top: 0; left: 0;
+      pointer-events: none;
+    }
+    #label-renderer div { pointer-events: none; }
+
+    /* ── Section headers ── */
+    .sidebar-section {
+      margin-bottom: 1rem;
+    }
+    .sidebar-section-title {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Tree node ── */
+    .tree-node-3d {
+      margin-left: 1.2rem;
+      padding-left: 0.6rem;
+      border-left: 1px solid var(--border);
+      margin-top: 0.4rem;
+    }
+    .tree-node-3d:first-child {
+      margin-top: 0;
+    }
+    .tree-node-3d > .node-content-3d {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.3rem 0;
+    }
+    .tree-root-3d {
+      margin-left: 0;
+      padding-left: 0;
+      border-left: none;
+    }
+    .node-label-3d {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      width: 1.5rem;
+    }
+    .node-status-3d {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      background: var(--bg-tertiary);
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      margin-left: 0.2rem;
+    }
+
+    /* ── Angle inputs ── */
+    .angle-group {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      margin: 0.1rem 0;
+      width: 100%;
+    }
+    .angle-group .angle-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      width: 1rem;
+      text-align: right;
+      font-family: var(--font-sans);
+    }
+    .angle-group input[type="range"] {
+      flex: 1;
+      min-width: 50px;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    .angle-group input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: none;
+    }
+    .angle-group input[type="range"]::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: none;
+    }
+    .angle-value {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      width: 3.2rem;
+      text-align: right;
+      font-family: var(--font-sans);
+    }
+    .angle-value .deg {
+      color: var(--text-muted);
+      font-size: 0.6rem;
+    }
+
+    /* ── Tree action buttons ── */
+    .node-actions-3d {
+      display: flex;
+      gap: 0.25rem;
+      margin-left: auto;
+    }
+    .node-actions-3d button {
+      font-family: var(--font-sans);
+      font-size: 0.6rem;
+      padding: 0.15rem 0.4rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+    .node-actions-3d button:hover {
+      background: var(--bg-card-hover);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+    .node-actions-3d button.remove-btn:hover {
+      color: var(--error);
+      border-color: var(--error);
+    }
+
+    /* ── Global controls ── */
+    .viewer-controls {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .viewer-controls .btn {
+      font-size: 0.75rem;
+      padding: 0.4rem 0.8rem;
+    }
+    .viewer-controls .btn-small {
+      font-size: 0.65rem;
+      padding: 0.25rem 0.5rem;
+    }
+
+    /* ── Viewport overlay ── */
+    .viewport-overlay {
+      position: absolute;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(10,14,23,0.8);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.4rem 0.8rem;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    /* ── Angle info overlay ── */
+    .angle-info-overlay {
+      position: absolute;
+      top: 0.75rem;
+      left: 0.75rem;
+      background: rgba(10,14,23,0.85);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.5rem 0.75rem;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      pointer-events: none;
+      line-height: 1.6;
+      max-height: 40%;
+      overflow-y: auto;
+    }
+    .angle-info-overlay .info-row {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .angle-info-overlay .info-row .info-particle {
+      color: var(--accent);
+      font-weight: 600;
+      width: 1.2rem;
+    }
+    .angle-info-overlay .info-row .info-angles {
+      color: var(--text-muted);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 768px) {
+      .viewer-layout {
+        flex-direction: column;
+        height: auto;
+      }
+      .viewer-sidebar {
+        width: 100%;
+        min-width: unset;
+        max-height: 50vh;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .viewer-viewport {
+        height: 50vh;
+        min-height: 400px;
+      }
+    }
+
+    /* ── Loading placeholder ── */
+    .viewport-placeholder {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+    .viewport-placeholder .icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container" style="max-width:100%;padding:0 1rem;">
+      <div class="header-content">
+        <div style="display:flex;align-items:center;gap:1rem;">
+          <a href="../index.html" class="back-link">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            Tools
+          </a>
+          <div class="logo">
+            <div class="logo-icon">⊡</div>
+            <span>Decay Angles 3D Viewer</span>
+          </div>
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-muted);">
+          Interactive 3D Visualization
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Viewer Layout -->
+  <div class="viewer-layout">
+
+    <!-- Sidebar -->
+    <div class="viewer-sidebar">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Decay Tree</div>
+        <div id="tree-container-3d"></div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Controls</div>
+        <div class="viewer-controls">
+          <button class="btn btn-secondary btn-small" onclick="addChildToRoot()">+ Add Decay</button>
+          <button class="btn btn-secondary btn-small" onclick="resetTree()">Reset</button>
+          <button class="btn btn-secondary btn-small" onclick="resetCamera()">Reset View</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Examples</div>
+        <div class="viewer-controls">
+          <button class="btn btn-secondary btn-small" onclick="loadExample('simple')">Simple</button>
+          <button class="btn btn-secondary btn-small" onclick="loadExample('cascade')">Cascade</button>
+          <button class="btn btn-secondary btn-small" onclick="loadExample('asym')">Asymmetric</button>
+        </div>
+      </div>
+
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Display</div>
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.75rem;color:var(--text-secondary);cursor:pointer;">
+          <input type="checkbox" id="show-phi-arc" checked> Show φ arc
+        </label>
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.75rem;color:var(--text-secondary);cursor:pointer;margin-top:0.2rem;">
+          <input type="checkbox" id="show-decay-plane" checked> Show decay plane
+        </label>
+        <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.75rem;color:var(--text-secondary);cursor:pointer;margin-top:0.2rem;">
+          <input type="checkbox" id="show-angle-info" checked> Show angle info
+        </label>
+      </div>
+    </div>
+
+    <!-- 3D Viewport -->
+    <div class="viewer-viewport" id="viewport">
+      <div class="viewport-placeholder" id="viewport-placeholder">
+        <div class="icon">⊡</div>
+        <div>Build a decay tree and adjust angles</div>
+      </div>
+      <div id="label-renderer"></div>
+      <div class="angle-info-overlay" id="angle-info-overlay" style="display:none;"></div>
+      <div class="viewport-overlay">Drag to rotate · Scroll to zoom</div>
+    </div>
+  </div>
+
+  <!-- Three.js -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script type="module">
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 1. Three.js scene setup
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+    const viewport = document.getElementById('viewport');
+    const labelContainer = document.getElementById('label-renderer');
+
+    // Scene
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0e17);
+
+    // Camera
+    const camera = new THREE.PerspectiveCamera(40, viewport.clientWidth / viewport.clientHeight, 0.1, 100);
+    camera.position.set(6, 5, 8);
+    camera.lookAt(0, 0, 0);
+
+    // WebGL Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = false;
+    viewport.insertBefore(renderer.domElement, labelContainer);
+
+    // CSS2D Renderer for labels
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(viewport.clientWidth, viewport.clientHeight);
+    labelRenderer.domElement.style.position = 'absolute';
+    labelRenderer.domElement.style.top = '0';
+    labelRenderer.domElement.style.left = '0';
+    labelRenderer.domElement.style.pointerEvents = 'none';
+    labelContainer.appendChild(labelRenderer.domElement);
+
+    // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.minDistance = 2;
+    controls.maxDistance = 30;
+    controls.target.set(0, 0, 0);
+    controls.update();
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+    dirLight.position.set(5, 10, 7);
+    scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0x8888ff, 0.3);
+    fillLight.position.set(-3, 1, -5);
+    scene.add(fillLight);
+
+    // Grid helper
+    const gridHelper = new THREE.GridHelper(10, 10, 0x1a2332, 0x1a2332);
+    scene.add(gridHelper);
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 2. Tree data
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    var decayTree = {
+      children: [
+        { children: null },
+        { children: null }
+      ]
+    };
+    var nodeIdCounter = 0;
+
+    // Angle values: path -> { theta, phi }
+    var angleValues = {};
+
+    // Colors for particles (by depth)
+    const PARTICLE_COLORS = [
+      0x06b6d4, // cyan (root)
+      0x8b5cf6, // purple
+      0x10b981, // green
+      0xf59e0b, // amber
+      0xef4444, // red
+      0xec4899, // pink
+      0x3b82f6, // blue
+      0x14b8a6, // teal
+    ];
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 3. Utility functions
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function pathKey(path) { return path.join(','); }
+
+    function getNodeByPath(path) {
+      var node = decayTree;
+      for (var i = 0; i < path.length; i++) {
+        if (!node.children) return null;
+        node = node.children[path[i]];
+      }
+      return node;
+    }
+
+    function cloneTree(node) {
+      var c = {};
+      if (node.children) {
+        c.children = [cloneTree(node.children[0]), cloneTree(node.children[1])];
+      }
+      return c;
+    }
+
+    function buildPathNameMap(tree) {
+      var map = {};
+      var code = 65;
+      function walk(node, path) {
+        map[path.join(',')] = String.fromCharCode(code);
+        code++;
+        if (node.children) {
+          walk(node.children[0], path.concat(0));
+          walk(node.children[1], path.concat(1));
+        }
+      }
+      if (tree) walk(tree, []);
+      return map;
+    }
+
+    function getColor(depth) {
+      return PARTICLE_COLORS[depth % PARTICLE_COLORS.length];
+    }
+
+    function getLabelStyle(depth) {
+      var colors = ['#06b6d4', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#ec4899', '#3b82f6', '#14b8a6'];
+      return {
+        color: colors[depth % colors.length],
+        fontFamily: "'SF Mono','Fira Code',monospace",
+        fontSize: '14px',
+        fontWeight: '600',
+        textShadow: '0 0 8px rgba(0,0,0,0.8), 0 0 3px rgba(0,0,0,0.9)',
+        padding: '2px 6px',
+        borderRadius: '3px',
+        background: 'rgba(10,14,23,0.6)',
+        border: '1px solid ' + colors[depth % colors.length],
+      };
+    }
+
+    function degToRad(d) { return d * Math.PI / 180; }
+    function radToDeg(r) { return r * 180 / Math.PI; }
+
+    // Returns an arbitrary unit vector orthogonal to v
+    function orthogonalVector(v) {
+      var ax = Math.abs(v.x);
+      var ay = Math.abs(v.y);
+      var az = Math.abs(v.z);
+      var up = (ax <= ay && ax <= az) ? new THREE.Vector3(1, 0, 0)
+             : (ay <= az) ? new THREE.Vector3(0, 1, 0)
+             : new THREE.Vector3(0, 0, 1);
+      var result = new THREE.Vector3().crossVectors(v, up);
+      return result.length() > 1e-10 ? result.normalize() : new THREE.Vector3(0, 1, 0);
+    }
+
+    // Default angles: theta=90°, phi=0°
+    function ensureAngles(path) {
+      var k = pathKey(path);
+      if (!angleValues[k]) {
+        angleValues[k] = { theta: Math.PI / 2, phi: 0 };
+      }
+      return angleValues[k];
+    }
+
+    function isDecayingNode(path) {
+      var node = getNodeByPath(path);
+      return node && node.children !== null;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 4. Tree UI rendering
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    var treeContainer = document.getElementById('tree-container-3d');
+
+    function renderTreeUI() {
+      treeContainer.innerHTML = '';
+      var nameMap = buildPathNameMap(decayTree);
+      treeContainer.appendChild(renderNodeUI(decayTree, [], nameMap));
+      updateAngleInfoOverlay();
+    }
+
+    function renderNodeUI(node, path, nameMap) {
+      var div = document.createElement('div');
+      div.className = 'tree-node-3d' + (path.length === 0 ? ' tree-root-3d' : '');
+
+      var content = document.createElement('div');
+      content.className = 'node-content-3d';
+
+      // Particle name
+      var nameEl = document.createElement('span');
+      nameEl.className = 'node-label-3d';
+      nameEl.style.color = '#' + getColor(path.length).toString(16).padStart(6, '0');
+      nameEl.textContent = nameMap[pathKey(path)] || '?';
+      content.appendChild(nameEl);
+
+      // Status badge
+      var statusEl = document.createElement('span');
+      statusEl.className = 'node-status-3d';
+      statusEl.textContent = node.children ? 'decays' : 'final';
+      content.appendChild(statusEl);
+
+      // Action buttons
+      var actions = document.createElement('div');
+      actions.className = 'node-actions-3d';
+
+      if (node.children) {
+        var finalBtn = document.createElement('button');
+        finalBtn.textContent = 'Final';
+        finalBtn.addEventListener('click', function() {
+          toggleDecay(path);
+        });
+        actions.appendChild(finalBtn);
+      } else if (path.length > 0) {
+        var decayBtn = document.createElement('button');
+        decayBtn.textContent = 'Decay';
+        decayBtn.addEventListener('click', function() {
+          toggleDecay(path);
+        });
+        actions.appendChild(decayBtn);
+      }
+
+      // Root can also toggle
+      if (path.length === 0 && !node.children) {
+        var rootDecayBtn = document.createElement('button');
+        rootDecayBtn.textContent = 'Decay';
+        rootDecayBtn.addEventListener('click', function() {
+          toggleDecay(path);
+        });
+        actions.appendChild(rootDecayBtn);
+      }
+
+      if (path.length > 0) {
+        var removeBtn = document.createElement('button');
+        removeBtn.textContent = '×';
+        removeBtn.className = 'remove-btn';
+        removeBtn.addEventListener('click', function() {
+          removeNode(path);
+        });
+        actions.appendChild(removeBtn);
+      }
+
+      if (actions.children.length > 0) content.appendChild(actions);
+      div.appendChild(content);
+
+      // Angle controls for decaying nodes
+      if (node.children) {
+        var ang = ensureAngles(path);
+        var angleDiv = document.createElement('div');
+        angleDiv.style.paddingLeft = '1.8rem';
+        angleDiv.style.width = '100%';
+
+        // Theta
+        angleDiv.appendChild(createAngleSlider(path, 'θ', ang, 'theta', 0, 180));
+        // Phi
+        angleDiv.appendChild(createAngleSlider(path, 'φ', ang, 'phi', 0, 360));
+
+        div.appendChild(angleDiv);
+      }
+
+      // Render children
+      if (node.children) {
+        div.appendChild(renderNodeUI(node.children[0], path.concat(0), nameMap));
+        div.appendChild(renderNodeUI(node.children[1], path.concat(1), nameMap));
+      }
+
+      return div;
+    }
+
+    function createAngleSlider(path, label, angObj, key, minDeg, maxDeg) {
+      var group = document.createElement('div');
+      group.className = 'angle-group';
+
+      var lbl = document.createElement('span');
+      lbl.className = 'angle-label';
+      lbl.textContent = label;
+      group.appendChild(lbl);
+
+      var slider = document.createElement('input');
+      slider.type = 'range';
+      var valDeg = radToDeg(angObj[key]);
+      slider.min = minDeg;
+      slider.max = maxDeg;
+      slider.step = 1;
+      slider.value = Math.round(valDeg);
+      slider.addEventListener('input', function() {
+        angObj[key] = degToRad(parseFloat(this.value));
+        valueSpan.textContent = this.value + '°';
+        scheduleRender();
+      });
+      group.appendChild(slider);
+
+      var valueSpan = document.createElement('span');
+      valueSpan.className = 'angle-value';
+      valueSpan.textContent = Math.round(valDeg) + '°';
+      group.appendChild(valueSpan);
+
+      return group;
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 5. Tree manipulation
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function toggleDecay(path) {
+      var node = getNodeByPath(path);
+      if (!node) return;
+      if (node.children) {
+        node.children = null;
+      } else {
+        node.children = [{ children: null }, { children: null }];
+      }
+      renderTreeUI();
+      scheduleRender();
+    }
+
+    function removeNode(path) {
+      if (path.length === 0) return;
+      var parentPath = path.slice(0, -1);
+      var childIdx = path[path.length - 1];
+      var parent = getNodeByPath(parentPath);
+      if (!parent || !parent.children) return;
+      parent.children[childIdx] = { children: null };
+      renderTreeUI();
+      scheduleRender();
+    }
+
+    window.addChildToRoot = function() {
+      if (!decayTree.children) {
+        decayTree.children = [{ children: null }, { children: null }];
+        renderTreeUI();
+        scheduleRender();
+      }
+    };
+
+    window.resetTree = function() {
+      decayTree = { children: null };
+      angleValues = {};
+      renderTreeUI();
+      // Clear scene
+      clearScene();
+      document.getElementById('angle-info-overlay').style.display = 'none';
+      document.getElementById('viewport-placeholder').style.display = '';
+    };
+
+    function resetCamera() {
+      camera.position.set(6, 5, 8);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    }
+    window.resetCamera = resetCamera;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 6. Examples
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    window.loadExample = function(name) {
+      angleValues = {};
+      switch (name) {
+        case 'simple':
+          decayTree = { children: [{ children: null }, { children: null }] };
+          break;
+        case 'cascade':
+          decayTree = {
+            children: [
+              { children: [{ children: null }, { children: null }] },
+              { children: [{ children: null }, { children: null }] }
+            ]
+          };
+          // Set angles for cascade
+          angleValues[''] = { theta: Math.PI / 3, phi: 0 };                 // A -> B C: θ=60°
+          angleValues['0'] = { theta: Math.PI / 4, phi: Math.PI / 3 };      // B -> D E: θ=45°, φ=60°
+          angleValues['1'] = { theta: 2 * Math.PI / 3, phi: Math.PI / 6 };  // C -> F G: θ=120°, φ=30°
+          break;
+        case 'asym':
+          decayTree = {
+            children: [
+              { children: null },
+              { children: [{ children: null }, { children: null }] }
+            ]
+          };
+          angleValues[''] = { theta: degToRad(70), phi: degToRad(45) };
+          angleValues['1'] = { theta: degToRad(110), phi: degToRad(135) };
+          break;
+      }
+      renderTreeUI();
+      scheduleRender();
+    };
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 7. 3D geometry computation & rendering
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    const SCALE = 2.0;
+    const SPHERE_RADIUS = 0.25;
+    const ARROW_LENGTH = 0.4;
+    const ARROW_HEAD_LENGTH = 0.15;
+    const ARROW_HEAD_WIDTH = 0.1;
+
+    var decayGroup = new THREE.Group();
+    scene.add(decayGroup);
+    var labelGroup = new THREE.Group();
+    scene.add(labelGroup);
+
+    var renderPending = false;
+
+    function scheduleRender() {
+      if (!renderPending) {
+        renderPending = true;
+        requestAnimationFrame(function() {
+          renderPending = false;
+          doRender();
+        });
+      }
+    }
+
+    function clearScene() {
+      // Dispose decay group
+      while (decayGroup.children.length) {
+        var child = decayGroup.children[0];
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+        decayGroup.remove(child);
+      }
+      while (labelGroup.children.length) {
+        var child = labelGroup.children[0];
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+        if (child.isCSS2DObject && child.element && child.element.parentNode) {
+          child.element.parentNode.removeChild(child.element);
+        }
+        labelGroup.remove(child);
+      }
+    }
+
+    function doRender() {
+      clearScene();
+
+      if (!decayTree.children) {
+        document.getElementById('viewport-placeholder').style.display = '';
+        document.getElementById('angle-info-overlay').style.display = 'none';
+        return;
+      }
+      document.getElementById('viewport-placeholder').style.display = 'none';
+
+      var nameMap = buildPathNameMap(decayTree);
+      var nodeData = {};
+
+      // First pass: compute all positions and directions
+      computeNodeGeometry(decayTree, [], new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(1, 0, 0), nodeData, nameMap);
+
+      // Second pass: draw everything
+      for (var pathStr in nodeData) {
+        var nd = nodeData[pathStr];
+        drawParticle(nd);
+        if (nd.childrenInfo) {
+          drawDecayVertex(nd, nodeData);
+        }
+      }
+
+      // Update angle info overlay
+      updateAngleInfoOverlay(nodeData, nameMap);
+    }
+
+    function computeNodeGeometry(node, path, origin, vz, vx, nodeData, nameMap) {
+      var pathStr = pathKey(path);
+      var depth = path.length;
+      var name = nameMap[pathStr] || '?';
+      var color = getColor(depth);
+
+      var pos = origin.clone();
+      // Normalize and re-orthogonalize to prevent drift
+      var dir = vz.clone().normalize();
+      var rawRef = vx.clone();
+      // Remove component parallel to dir
+      var refDot = rawRef.dot(dir);
+      rawRef.addScaledVector(dir, -refDot);
+      var refDir = rawRef.length() > 1e-10 ? rawRef.normalize() : orthogonalVector(dir);
+
+      var nd = {
+        path: path,
+        pathStr: pathStr,
+        name: name,
+        position: pos,
+        direction: dir,
+        refDirection: refDir,
+        color: color,
+        depth: depth,
+      };
+      nodeData[pathStr] = nd;
+
+      if (node.children) {
+        var ang = angleValues[pathStr] || { theta: Math.PI / 2, phi: 0 };
+        var theta = ang.theta;
+        var phi = ang.phi;
+
+        // Orthonormal basis: dir, refDir, vy = dir × refDir
+        var vy = new THREE.Vector3().crossVectors(dir, refDir);
+        if (vy.length() < 1e-10) {
+          vy.copy(orthogonalVector(dir));
+        }
+        vy.normalize();
+
+        // Child direction in parent rest frame
+        var arrow = new THREE.Vector3()
+          .addScaledVector(dir, Math.cos(theta))
+          .addScaledVector(refDir, Math.sin(theta) * Math.cos(phi))
+          .addScaledVector(vy, Math.sin(theta) * Math.sin(phi));
+        var arrowLen = arrow.length();
+        if (arrowLen > 1e-10) arrow.divideScalar(arrowLen);
+
+        // Decay vertex (one unit along parent direction from particle)
+        var decayPos = pos.clone().add(dir.clone().multiplyScalar(SCALE));
+
+        // Children positions
+        var childScale = SCALE * 0.9;
+        var child1Pos = decayPos.clone().add(arrow.clone().multiplyScalar(childScale));
+        var child2Pos = decayPos.clone().add(arrow.clone().negate().multiplyScalar(childScale));
+
+        // Child reference direction: use refDir if arrow is near dir, newVx otherwise
+        var newVx;
+        var cosTheta = dir.dot(arrow);
+        if (Math.abs(cosTheta) > 0.9999) {
+          // Child goes along parent direction — use parent's refDir
+          newVx = refDir.clone();
+        } else {
+          newVx = new THREE.Vector3().crossVectors(
+            new THREE.Vector3().crossVectors(dir, arrow), arrow
+          );
+          if (newVx.length() > 1e-10) newVx.normalize();
+        }
+
+        nd.childrenInfo = {
+          theta: theta,
+          phi: phi,
+          arrow: arrow,
+          decayPos: decayPos,
+          vy: vy,
+        };
+
+        // Recursively compute children
+        if (node.children[0]) {
+          computeNodeGeometry(node.children[0], path.concat(0), child1Pos, arrow, newVx, nodeData, nameMap);
+        }
+        if (node.children[1]) {
+          computeNodeGeometry(node.children[1], path.concat(1), child2Pos, arrow.clone().negate(), newVx.clone().negate(), nodeData, nameMap);
+        }
+      }
+    }
+
+    // ── Draw particle sphere ──
+    function drawParticle(nd) {
+      var geo = new THREE.SphereGeometry(SPHERE_RADIUS, 24, 24);
+      var mat = new THREE.MeshStandardMaterial({
+        color: nd.color,
+        emissive: nd.color,
+        emissiveIntensity: 0.15,
+        roughness: 0.3,
+        metalness: 0.1,
+      });
+      var mesh = new THREE.Mesh(geo, mat);
+      mesh.position.copy(nd.position);
+      decayGroup.add(mesh);
+
+      // Glow ring
+      var ringGeo = new THREE.RingGeometry(SPHERE_RADIUS * 1.3, SPHERE_RADIUS * 2.0, 32);
+      var ringMat = new THREE.MeshBasicMaterial({
+        color: nd.color,
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.DoubleSide,
+      });
+      var ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.copy(nd.position);
+      ring.lookAt(camera.position);
+      decayGroup.add(ring);
+
+      // Label (CSS2D)
+      var labelDiv = document.createElement('div');
+      labelDiv.textContent = nd.name;
+      var style = getLabelStyle(nd.depth);
+      for (var prop in style) labelDiv.style[prop] = style[prop];
+      var label = new CSS2DObject(labelDiv);
+      label.position.copy(nd.position);
+      label.position.y += SPHERE_RADIUS + 0.35;
+      labelGroup.add(label);
+    }
+
+    // ── Draw decay vertex ──
+    function drawDecayVertex(nd, nodeData) {
+      var info = nd.childrenInfo;
+      var pos = nd.position;
+      var dir = nd.direction;
+      var refDir = nd.refDirection;
+      var decayPos = info.decayPos;
+      var arrow = info.arrow;
+      var theta = info.theta;
+      var phi = info.phi;
+      var vy = info.vy;
+
+      var showPhiArc = document.getElementById('show-phi-arc').checked;
+      var showDecayPlane = document.getElementById('show-decay-plane').checked;
+
+      // ── Parent trajectory (line from particle to decay vertex) ──
+      drawLine(pos, decayPos, nd.color, 2);
+
+      // ── Dashed reference line extending beyond decay vertex ──
+      var extendPos = decayPos.clone().add(dir.clone().multiplyScalar(SCALE * 0.4));
+      drawDashedLine(decayPos, extendPos, 0x2d3748, 1);
+
+      // ── Decay product lines ──
+      // Find child data to connect
+      var child0Path = nd.path.concat(0);
+      var child1Path = nd.path.concat(1);
+      var child0 = nodeData[pathKey(child0Path)];
+      var child1 = nodeData[pathKey(child1Path)];
+
+      if (child0) {
+        drawLine(decayPos, child0.position, child0.color, 2);
+        // Arrow indicator
+        drawSmallArrow(decayPos, child0.position, child0.color);
+      }
+      if (child1) {
+        drawLine(decayPos, child1.position, child1.color, 2);
+        drawSmallArrow(decayPos, child1.position, child1.color);
+      }
+
+      // ── Theta arc (from vz direction to arrow direction) ──
+      if (theta > 0.01) {
+        drawArc(
+          decayPos,
+          dir.clone().multiplyScalar(SCALE * 0.4),
+          arrow.clone().multiplyScalar(SCALE * 0.4),
+          0xff6b6b,
+          2,
+          32
+        );
+      }
+
+      // ── Phi arc (azimuthal angle around vz) ──
+      if (showPhiArc && Math.abs(phi) > 0.01) {
+        var phiArcRadius = SCALE * 0.35;
+        // Draw from vy direction to the projection of arrow on the perpendicular plane
+        // vy is perpendicular to dir, so the arc from vy around dir shows phi
+        var vyDir = vy.clone().normalize();
+        var projArrow = arrow.clone();
+        // Remove component along dir to get projection onto perpendicular plane
+        var alongDir = projArrow.dot(dir);
+        projArrow.addScaledVector(dir, -alongDir);
+        if (projArrow.length() > 1e-10) projArrow.normalize();
+
+        drawPhiArc(
+          decayPos,
+          vyDir.clone().multiplyScalar(phiArcRadius),
+          projArrow.clone().multiplyScalar(phiArcRadius),
+          dir,
+          0x6bb5ff,
+          2,
+          24
+        );
+      }
+
+      // ── Decay plane ──
+      if (showDecayPlane) {
+        drawDecayPlaneMesh(decayPos, dir, refDir, vy, arrow);
+      }
+    }
+
+    // ── Drawing primitives ──
+
+    function drawLine(from, to, color, lineWidth) {
+      var points = [from.clone(), to.clone()];
+      var geo = new THREE.BufferGeometry().setFromPoints(points);
+      var mat = new THREE.LineBasicMaterial({ color: color, linewidth: lineWidth });
+      var line = new THREE.Line(geo, mat);
+      decayGroup.add(line);
+    }
+
+    function drawDashedLine(from, to, color, lineWidth) {
+      var points = [from.clone(), to.clone()];
+      var geo = new THREE.BufferGeometry().setFromPoints(points);
+      var mat = new THREE.LineDashedMaterial({
+        color: color,
+        dashSize: 0.08,
+        gapSize: 0.08,
+        linewidth: lineWidth,
+      });
+      var line = new THREE.Line(geo, mat);
+      line.computeLineDistances();
+      decayGroup.add(line);
+    }
+
+    function drawSmallArrow(from, to, color) {
+      var dir = to.clone().sub(from);
+      var len = dir.length();
+      if (len < 0.01) return;
+      dir.normalize();
+      // Place arrow at 60% along the line
+      var arrowPos = from.clone().add(dir.clone().multiplyScalar(len * 0.6));
+      var arrowLen = Math.min(ARROW_LENGTH, len * 0.3);
+      var arrowHelper = new THREE.ArrowHelper(dir, arrowPos, arrowLen, color, ARROW_HEAD_LENGTH, ARROW_HEAD_WIDTH);
+      decayGroup.add(arrowHelper);
+    }
+
+    function drawArc(center, startVec, endVec, color, lineWidth, segments) {
+      var s = startVec.clone();
+      var e = endVec.clone();
+      var sn = s.clone().normalize();
+      var en = e.clone().normalize();
+
+      // Axis perpendicular to both
+      var axis = new THREE.Vector3().crossVectors(sn, en);
+      if (axis.length() < 1e-10) return;
+      axis.normalize();
+
+      var cosA = THREE.MathUtils.clamp(sn.dot(en), -1, 1);
+      var sinA = THREE.MathUtils.clamp(new THREE.Vector3().crossVectors(sn, en).length(), 0, 1);
+      var angle = Math.atan2(sinA, cosA);
+
+      var sLen = s.length();
+      var eLen = e.length();
+      var avgLen = (sLen + eLen) / 2;
+
+      var points = [];
+      for (var i = 0; i <= segments; i++) {
+        var t = i / segments;
+        var a = angle * t;
+        var dir = sn.clone().multiplyScalar(Math.cos(a))
+          .add(new THREE.Vector3().crossVectors(axis, sn).multiplyScalar(Math.sin(a)));
+        var pt = center.clone().add(dir.multiplyScalar(avgLen));
+        points.push(pt);
+      }
+
+      var geo = new THREE.BufferGeometry().setFromPoints(points);
+      var mat = new THREE.LineBasicMaterial({ color: color, linewidth: lineWidth });
+      var line = new THREE.Line(geo, mat);
+      decayGroup.add(line);
+    }
+
+    function drawPhiArc(center, startVec, endVec, axis, color, lineWidth, segments) {
+      var s = startVec.clone().normalize();
+      var e = endVec.clone().normalize();
+      var ax = axis.clone().normalize();
+
+      var cosA = THREE.MathUtils.clamp(s.dot(e), -1, 1);
+      var sinA = THREE.MathUtils.clamp(new THREE.Vector3().crossVectors(s, e).length(), 0, 1);
+      var angle = Math.atan2(sinA, cosA);
+
+      // Check sign: if cross(s,e)·axis < 0, angle is negative
+      var cross = new THREE.Vector3().crossVectors(s, e);
+      if (cross.dot(ax) < 0) angle = -angle;
+
+      var radius = startVec.length();
+      var points = [];
+      for (var i = 0; i <= segments; i++) {
+        var t = i / segments;
+        var a = angle * t;
+        // Rodrigues' rotation formula
+        var dir = s.clone().multiplyScalar(Math.cos(a))
+          .add(new THREE.Vector3().crossVectors(ax, s).multiplyScalar(Math.sin(a)))
+          .add(ax.clone().multiplyScalar(ax.dot(s) * (1 - Math.cos(a))));
+        var pt = center.clone().add(dir.multiplyScalar(radius));
+        points.push(pt);
+      }
+
+      var geo = new THREE.BufferGeometry().setFromPoints(points);
+      var mat = new THREE.LineBasicMaterial({ color: color, linewidth: lineWidth });
+      var line = new THREE.Line(geo, mat);
+      decayGroup.add(line);
+    }
+
+    function drawDecayPlaneMesh(center, dir, refDir, vy, arrow) {
+      // Draw a transparent disk representing the decay plane
+      // The disk is centered at 'center' and oriented in the plane of dir and arrow
+      
+      // The disk normal is perpendicular to both dir and arrow
+      var normal = new THREE.Vector3().crossVectors(dir, arrow);
+      if (normal.length() < 1e-10) return;
+      normal.normalize();
+
+      var radius = SCALE * 0.5;
+      var segments = 32;
+      var diskGeo = new THREE.CircleGeometry(radius, segments);
+      var diskMat = new THREE.MeshBasicMaterial({
+        color: 0x2d3748,
+        transparent: true,
+        opacity: 0.15,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      var disk = new THREE.Mesh(diskGeo, diskMat);
+      disk.position.copy(center);
+
+      // Orient disk: default normal is +Z, we need to rotate to match 'normal'
+      var quat = new THREE.Quaternion().setFromUnitVectors(
+        new THREE.Vector3(0, 0, 1),
+        normal
+      );
+      disk.quaternion.copy(quat);
+      decayGroup.add(disk);
+
+      // Ring outline
+      var ringPoints = [];
+      for (var i = 0; i <= segments; i++) {
+        var a = (i / segments) * Math.PI * 2;
+        var p = new THREE.Vector3(Math.cos(a) * radius, Math.sin(a) * radius, 0);
+        p.applyQuaternion(quat);
+        p.add(center);
+        ringPoints.push(p);
+      }
+      var ringGeo = new THREE.BufferGeometry().setFromPoints(ringPoints);
+      var ringMat = new THREE.LineBasicMaterial({ color: 0x3a4a6a, transparent: true, opacity: 0.3 });
+      var ring = new THREE.Line(ringGeo, ringMat);
+      decayGroup.add(ring);
+    }
+
+    // ── Angle info overlay ──
+    function updateAngleInfoOverlay(nodeData, nameMap) {
+      var overlay = document.getElementById('angle-info-overlay');
+      if (!document.getElementById('show-angle-info').checked || !nodeData || !nameMap) {
+        overlay.style.display = 'none';
+        return;
+      }
+
+      var lines = [];
+      for (var pathStr in nodeData) {
+        var nd = nodeData[pathStr];
+        if (nd.childrenInfo) {
+          var thetaDeg = Math.round(radToDeg(nd.childrenInfo.theta));
+          var phiDeg = Math.round(radToDeg(nd.childrenInfo.phi));
+          lines.push(
+            '<div class="info-row">' +
+            '<span class="info-particle">' + nd.name + '</span>' +
+            '<span class="info-angles">θ=' + thetaDeg + '° φ=' + phiDeg + '°</span>' +
+            '</div>'
+          );
+        }
+      }
+
+      if (lines.length > 0) {
+        overlay.innerHTML = lines.join('');
+        overlay.style.display = '';
+      } else {
+        overlay.style.display = 'none';
+      }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 8. Display option toggles
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    document.getElementById('show-phi-arc').addEventListener('change', scheduleRender);
+    document.getElementById('show-decay-plane').addEventListener('change', scheduleRender);
+    document.getElementById('show-angle-info').addEventListener('change', scheduleRender);
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 9. Resize handler
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function onResize() {
+      var w = viewport.clientWidth;
+      var h = viewport.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      labelRenderer.setSize(w, h);
+    }
+
+    window.addEventListener('resize', onResize);
+    // Initial resize to set correct aspect ratio
+    onResize();
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 10. Animation loop
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Update glow rings to face camera
+      decayGroup.children.forEach(function(child) {
+        if (child.isMesh && child.geometry.type === 'RingGeometry') {
+          child.lookAt(camera.position);
+        }
+      });
+
+      controls.update();
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    }
+    animate();
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 11. Initial render
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    renderTreeUI();
+    scheduleRender();
+
+    console.log('Decay Angles 3D Viewer loaded');
+
+    // Export for debugging
+    window.__scene = scene;
+    window.__controls = controls;
+
+  </script>
+</body>
+</html>
