@@ -630,6 +630,13 @@ function _basisKey(basis) {
   }).join(',');
 }
 
+function _pmToLatex(pm) {
+  // pm is a phi multiplier: integer (1,2,3…) or half-integer (0.5, 1.5, …)
+  if (Number.isInteger(pm)) return String(pm);
+  var n = Math.round(pm * 2);
+  return '\\frac{' + n + '}{2}';
+}
+
 // --- TOP-LEVEL: structured formula computation ---
 
 /**
@@ -770,7 +777,7 @@ function getAngleFormulaSimplified(decayTree) {
             var pb = grp.phiBasis[pi];
             var pn = phiLatexNames[pb.idx];
             if (pb.pm && pb.pm !== 1) {
-              trigParts.push('\\' + pb.pf + '(' + pb.pm + pn + ')');
+              trigParts.push('\\' + pb.pf + '(' + _pmToLatex(pb.pm) + pn + ')');
             } else {
               // Strip wrapping parens for pm=1 (combined J=0 name needs them for pm≠1)
               var name = pn;
