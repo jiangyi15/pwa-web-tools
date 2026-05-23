@@ -113,14 +113,6 @@
       padding: 0.75rem 1rem;
       margin-bottom: 0.75rem;
     }
-    .helicity-card .h-label {
-      font-family: var(--font-sans);
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: var(--accent);
-      display: inline-block;
-      min-width: 6rem;
-    }
     .helicity-card .h-expr {
       font-family: serif;
       font-size: 0.95rem;
@@ -133,28 +125,6 @@
     }
     .helicity-card .h-expr .MathJax {
       color: var(--text-primary);
-    }
-
-    .ls-badge {
-      display: inline-block;
-      font-family: var(--font-sans);
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 0.2rem 0.4rem;
-      border-radius: 3px;
-      background: var(--accent-glow);
-      color: var(--accent);
-      margin-right: 0.25rem;
-      white-space: nowrap;
-    }
-
-    .coeff-breakdown {
-      font-size: 0.8rem;
-      margin-top: 0.3rem;
-      color: var(--text-secondary);
-    }
-    .coeff-breakdown .MathJax {
-      color: var(--text-secondary);
     }
 
     .formula-card {
@@ -394,7 +364,8 @@ Selection rules:
     // LATEX HELPERS
     // ===================================================================
     function spinToLatex(s) {
-      if (s.den === 1) return String(s.num);
+      if (s.num === 0) return '0';
+      if (s.num % s.den === 0) return String(s.num / s.den);
       if (s.num === 1 && s.den === 2) return '\\frac{1}{2}';
       if (s.num === -1 && s.den === 2) return '-\\frac{1}{2}';
       return '\\frac{' + s.num + '}{' + s.den + '}';
@@ -528,13 +499,7 @@ Selection rules:
               var fullLatex = 'H_{' + spinToLatex(toSpin(lb)) + ',' + spinToLatex(toSpin(lc)) + '} = ' + parts.join(' ');
 
               hResults.push({
-                lb: lb, lc: lc,
-                lbLatex: spinToLatex(toSpin(lb)),
-                lcLatex: spinToLatex(toSpin(lc)),
-                delta: delta,
-                fullLatex: fullLatex,
-                terms: terms,
-                nTerms: terms.length
+                fullLatex: fullLatex
               });
             }
           }
@@ -546,40 +511,15 @@ Selection rules:
             return;
           }
 
-          // Render results
-          var html = '';
-
-          // LS summary
-          html += '<div class="formula-display">';
-          html += '<div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:0.5rem;">Valid LS Channels</div>';
-          html += '<div>\\(' + lsSummaryLatex + '\\)</div>';
-          html += '</div>';
-
-          // Per-helicity formulas
-          html += '<div class="result-section">';
+          // Render results — just the equations
+          var html = '<div class="result-section">';
           html += '<h4>Helicity Amplitudes (' + hResults.length + ')</h4>';
 
           for (var i = 0; i < hResults.length; i++) {
             var hr = hResults[i];
 
             html += '<div class="helicity-card">';
-            html += '<div><span class="h-label">H<sub>' + hr.lbLatex + ',' + hr.lcLatex + '</sub></span>';
-            html += '  δ = \\( ' + spinToLatex(toSpin(hr.delta)) + ' \\)</div>';
-
             html += '<div class="h-expr">\\(' + hr.fullLatex + '\\)</div>';
-
-            // Detailed coefficient breakdown
-            html += '<div class="coeff-breakdown">';
-            for (var t = 0; t < hr.terms.length; t++) {
-              var c = hr.terms[t];
-              html += '<div style="margin-top:0.4rem;font-size:0.75rem;">';
-              html += '<span class="ls-badge">l=' + c.l + ', s=' + spinToLatex(toSpin(c.s)) + '</span> ';
-              html += '<span style="color:var(--text-muted);">Coefficient = </span>';
-              html += '\\(' + c.factorLatex + ' \\times ' + c.cg1Latex + ' \\times ' + c.cg2Latex + ' = ' + c.coeffLatex + '\\)';
-              html += '</div>';
-            }
-            html += '</div>';
-
             html += '</div>';
           }
 
