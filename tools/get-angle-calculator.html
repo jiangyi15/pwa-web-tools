@@ -230,9 +230,7 @@
             <h4 class="examples-title">Load Examples:</h4>
             <div class="examples-grid">
               <button type="button" class="example-btn" data-example='simple'>J=0 → J=0 + J=0</button>
-              <button type="button" class="example-btn" data-example='half'>J=1/2 → J=0 + J=0</button>
               <button type="button" class="example-btn" data-example='cascade1'>J=0 → J=1 + J=1 (cascade)</button>
-              <button type="button" class="example-btn" data-example='cascade2'>J=1/2 → J=1/2 + J=0 (cascade)</button>
             </div>
           </div>
         </div>
@@ -461,24 +459,12 @@ Selection rules:
         case 'simple':
           decayTree = { j: 0, children: [{ j: 0, children: null }, { j: 0, children: null }] };
           break;
-        case 'half':
-          decayTree = { j: 0.5, children: [{ j: 0, children: null }, { j: 0, children: null }] };
-          break;
         case 'cascade1':
           decayTree = {
             j: 0,
             children: [
               { j: 1, children: [{ j: 0, children: null }, { j: 0, children: null }] },
               { j: 1, children: [{ j: 0, children: null }, { j: 0, children: null }] }
-            ]
-          };
-          break;
-        case 'cascade2':
-          decayTree = {
-            j: 0.5,
-            children: [
-              { j: 0.5, children: [{ j: 0, children: null }, { j: 0, children: null }] },
-              { j: 0, children: null }
             ]
           };
           break;
