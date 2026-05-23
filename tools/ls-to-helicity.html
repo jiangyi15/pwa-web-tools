@@ -300,7 +300,6 @@
             <h4 class="examples-title">Load Examples:</h4>
             <div class="examples-grid">
               <button type="button" class="example-btn" data-example='simple'>J=1 → 0+0</button>
-              <button type="button" class="example-btn" data-example='half'>J=1/2 → 0+0</button>
               <button type="button" class="example-btn" data-example='halfhalf'>J=1/2 → 1/2+0</button>
               <button type="button" class="example-btn" data-example='twoLS'>J=1 → 1/2+1/2</button>
               <button type="button" class="example-btn" data-example='threeLS'>J=3/2 → 1+1/2</button>
@@ -659,14 +658,13 @@ Selection rules:
     // EXAMPLES
     // ===================================================================
     function loadExample(name) {
+      // Reset parities
+      document.getElementById('Pa').value = '0';
+      document.getElementById('Pb').value = '0';
+      document.getElementById('Pc').value = '0';
       switch (name) {
         case 'simple':
           document.getElementById('Ja').value = '1';
-          document.getElementById('Jb').value = '0';
-          document.getElementById('Jc').value = '0';
-          break;
-        case 'half':
-          document.getElementById('Ja').value = '1/2';
           document.getElementById('Jb').value = '0';
           document.getElementById('Jc').value = '0';
           break;
