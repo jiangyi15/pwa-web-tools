@@ -154,14 +154,6 @@
     .result-table .MathJax {
       font-size: 0.9em;
     }
-    .result-note {
-      padding: 0.5rem 0.75rem;
-      background: rgba(99, 102, 241, 0.08);
-      border-radius: var(--radius-sm);
-      font-size: 0.875rem;
-      color: var(--text-secondary);
-      margin-bottom: 1rem;
-    }
   </style>
 </head>
 <body>
@@ -550,9 +542,7 @@ Selection rules:
       
       // Build results table
       var html = '<div class="result-item"><div class="result-label">Angles: ' + result.angles.map(function(a) { return '\\(' + a + '\\)'; }).join('; ') + '</div></div>';
-      if (result.chiInfo) {
-        html += '<div class="result-item result-note"><span class="latex-cell" data-latex="\\chi = ' + escapeHtml(result.chiInfo) + '"></span></div>';
-      }
+
       html += '<div class="result-item"><div class="result-label">Angular Formulas</div>';
       html += '<table class="result-table"><thead><tr><th>λ</th><th>LS</th><th>T(φ,θ)</th></tr></thead><tbody>';
       
@@ -629,7 +619,6 @@ Selection rules:
       // Function names
       s = s.replace(/(?<!\\)cos/g, '\\cos').replace(/(?<!\\)sin/g, '\\sin');
       s = s.replace(/(?<!\\)phi/g, '\\phi').replace(/(?<!\\)theta/g, '\\theta');
-      s = s.replace(/(?<!\\)chi/g, '\\chi');
       return s;
     }
 
