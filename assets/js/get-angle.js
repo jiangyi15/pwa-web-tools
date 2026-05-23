@@ -656,11 +656,29 @@ function getAngleFormulaSimplified(decayTree) {
   
   // For each (helicity, LS) combination: expand half-angles, group, reconstruct
   var result = {};
-  // Track phi and theta names
-  var phiNames = [], thetaNames = [];
+  
+  // Detect J=0 root decay: both child phi terms share the same exponent,
+  // so we can fix φ₁=0 and rename φ₂→χ (one fewer azimuthal variable).
+  var phiCombine = null;
+  if (nDecays >= 3 &&
+      toSpin(vertices[0].Ja).value === 0 &&
+      decayTree.children && decayTree.children[0] && decayTree.children[1] &&
+      decayTree.children[0].children && decayTree.children[1].children) {
+    var c0size = countDecayVertices(decayTree.children[0]);
+    phiCombine = { removeIdx: 1, renameIdx: 1 + c0size };
+  }
+  
+  // Track phi and theta display names (adjusted for J=0 combination)
+  var phiNamesMap = [], thetaNamesMap = [];
   for (var i = 0; i < nDecays; i++) {
-    phiNames[i] = '\\phi_' + i;
-    thetaNames[i] = '\\theta_' + i;
+    if (phiCombine && i === phiCombine.removeIdx) {
+      phiNamesMap[i] = '0';           // fixed to zero
+    } else if (phiCombine && i === phiCombine.renameIdx) {
+      phiNamesMap[i] = 'chi';         // renamed to chi
+    } else {
+      phiNamesMap[i] = 'phi_' + i;
+    }
+    thetaNamesMap[i] = 'theta_' + i;
   }
   
   var algebriteThetaNames = [];
@@ -684,6 +702,34 @@ function getAngleFormulaSimplified(decayTree) {
       
       // Group by basis
       var grouped = _groupExpandedTerms(allExpanded);
+      
+      // Apply J=0 phi substitution: φ_removeIdx = 0
+      //   sin(l·0) = 0 → term vanishes
+      //   cos(l·0) = 1 → phi factor drops
+      if (phiCombine) {
+        var filtered = [];
+        for (var gi = 0; gi < grouped.length; gi++) {
+          var grp = grouped[gi];
+          var newPhi = [], skip = false;
+          for (var pi = 0; pi < grp.phiBasis.length; pi++) {
+            var pb = grp.phiBasis[pi];
+            if (pb.idx === phiCombine.removeIdx) {
+              if (pb.pf === 'sin') { skip = true; break; }
+            } else {
+              newPhi.push(pb);
+            }
+          }
+          if (!skip) {
+            filtered.push({
+              coeffStrs: grp.coeffStrs,
+              thetaBasis: grp.thetaBasis,
+              phiBasis: newPhi,
+              im: grp.im
+            });
+          }
+        }
+        grouped = filtered;
+      }
       
       // Reconstruct expressions using SurdSum (no Algebrite)
       try {
@@ -716,7 +762,7 @@ function getAngleFormulaSimplified(decayTree) {
           
           for (var pi = 0; pi < grp.phiBasis.length; pi++) {
             var pb = grp.phiBasis[pi];
-            var pn = 'phi_' + pb.idx;
+            var pn = phiNamesMap[pb.idx] || 'phi_' + pb.idx;
             if (pb.pm && pb.pm !== 1) { trigParts.push(pb.pf + '(' + pb.pm + '*' + pn + ')'); }
             else { trigParts.push(pb.pf + '(' + pn + ')'); }
           }
@@ -761,7 +807,11 @@ function getAngleFormulaSimplified(decayTree) {
   // Build angle list
   var angles = [];
   for (var i = 0; i < nDecays; i++) {
-    angles.push('phi_' + i + ', theta_' + i);
+    if (phiCombine && i === phiCombine.removeIdx) {
+      angles.push(thetaNamesMap[i]);  // only theta (phi fixed to 0)
+    } else {
+      angles.push(phiNamesMap[i] + ', ' + thetaNamesMap[i]);
+    }
   }
   
   return {
