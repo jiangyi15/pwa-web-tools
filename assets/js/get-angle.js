@@ -154,7 +154,9 @@ function toSpin(val) {
       var den = parseInt(parts[1], 10);
       return { num: num, den: den, value: num / den };
     }
-    return toSpin(parseFloat(val));
+    var n = parseInt(val, 10);
+    if (isNaN(n)) throw new Error('Invalid spin value: ' + val);
+    return { num: n, den: 1, value: n };
   }
   throw new Error('Invalid spin value: ' + val);
 }

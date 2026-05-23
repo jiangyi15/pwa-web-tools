@@ -25,18 +25,15 @@
  * Returns: {numerator, denominator, value, algebriteForm}
  */
 function parseQuantumNumber(input) {
-  const trimmed = String(input).trim();
+  const s = String(input).trim();
 
-  // Handle fraction format "a/b"
-  if (trimmed.includes('/')) {
-    const parts = trimmed.split('/');
-    if (parts.length !== 2) {
-      throw new Error(`Invalid fraction format: ${trimmed}`);
-    }
-    const num = parseFloat(parts[0]);
-    const den = parseFloat(parts[1]);
+  // Fraction format "a/b" — parse numerator/denominator as integers
+  const slashIdx = s.indexOf('/');
+  if (slashIdx !== -1) {
+    const num = parseInt(s.substring(0, slashIdx), 10);
+    const den = parseInt(s.substring(slashIdx + 1), 10);
     if (isNaN(num) || isNaN(den) || den === 0) {
-      throw new Error(`Invalid fraction: ${trimmed}`);
+      throw new Error(`Invalid quantum number: ${s}`);
     }
     return {
       numerator: num,
@@ -46,45 +43,17 @@ function parseQuantumNumber(input) {
     };
   }
 
-  // Handle decimal or integer
-  const val = parseFloat(trimmed);
-  if (isNaN(val)) {
-    throw new Error(`Invalid number: ${trimmed}`);
+  // Integer-only (no decimals — use fraction syntax for half-integers)
+  const n = parseInt(s, 10);
+  if (isNaN(n)) {
+    throw new Error(`Invalid quantum number: ${s}. Use fraction syntax e.g. "1/2" for half-integers.`);
   }
-
-  const twiceVal = val * 2;
-  const isHalfInteger = Math.abs(twiceVal - Math.round(twiceVal)) < 1e-10;
-
-  if (Number.isInteger(val)) {
-    return {
-      numerator: val,
-      denominator: 1,
-      value: val,
-      algebriteForm: val < 0 ? `(${val})` : String(val)
-    };
-  }
-
-  if (isHalfInteger) {
-    const num = Math.round(twiceVal);
-    return {
-      numerator: num,
-      denominator: 2,
-      value: val,
-      algebriteForm: `(${num}/2)`
-    };
-  }
-
-  if (typeof Algebrite !== 'undefined') {
-    const rational = Algebrite.run(`rationalize(${val})`);
-    return {
-      numerator: null,
-      denominator: null,
-      value: val,
-      algebriteForm: rational.trim()
-    };
-  }
-
-  throw new Error(`Cannot convert ${val} to a rational number`);
+  return {
+    numerator: n,
+    denominator: 1,
+    value: n,
+    algebriteForm: n < 0 ? `(${n})` : String(n)
+  };
 }
 
 /**
