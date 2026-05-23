@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="LS → Helicity Amplitude Converter - Convert canonical LS coupling amplitudes to helicity amplitudes for particle decays.">
+  <title>LS → Helicity Converter | Partial Wave Analysis Tools</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .input-section {
+      margin-bottom: 1rem;
+    }
+    .input-section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .qn-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    .qn-grid .form-group {
+      margin-bottom: 0;
+      min-width: 0;
+    }
+    .qn-grid .form-label {
+      margin-bottom: 0.3rem;
+      text-align: center;
+    }
+
+    .stepper {
+      display: flex;
+      align-items: stretch;
+      width: 100%;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+      transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    }
+    .stepper:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .stepper-btn {
+      flex: 0 0 auto;
+      width: 2rem;
+      border: none;
+      background: var(--bg-tertiary, var(--bg-secondary));
+      color: var(--text-secondary);
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+    }
+    .stepper-btn:hover {
+      background: var(--accent-glow);
+      color: var(--accent);
+    }
+    .stepper .form-input {
+      flex: 1 1 auto;
+      width: auto;
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      padding: 0.5rem 0.25rem;
+      text-align: center;
+    }
+    .stepper .form-input:focus { outline: none; box-shadow: none; }
+
+    @media (max-width: 480px) {
+      .qn-grid { gap: 0.4rem; }
+      .stepper-btn { width: 1.5rem; font-size: 1rem; }
+    }
+
+    /* Formula display */
+    .formula-display {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+      margin-bottom: 1rem;
+      overflow-x: auto;
+    }
+    .formula-display .MathJax {
+      color: var(--accent);
+    }
+
+    .result-section {
+      margin-top: 1.5rem;
+    }
+    .result-section > h4 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .helicity-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .helicity-card .h-label {
+      font-family: var(--font-sans);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+      display: inline-block;
+      min-width: 6rem;
+    }
+    .helicity-card .h-expr {
+      font-family: serif;
+      font-size: 0.95rem;
+      display: block;
+      margin-top: 0.3rem;
+      padding: 0.5rem;
+      background: var(--bg-tertiary, rgba(0,0,0,0.03));
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    .helicity-card .h-expr .MathJax {
+      color: var(--text-primary);
+    }
+
+    .ls-badge {
+      display: inline-block;
+      font-family: var(--font-sans);
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.4rem;
+      border-radius: 3px;
+      background: var(--accent-glow);
+      color: var(--accent);
+      margin-right: 0.25rem;
+      white-space: nowrap;
+    }
+
+    .coeff-breakdown {
+      font-size: 0.8rem;
+      margin-top: 0.3rem;
+      color: var(--text-secondary);
+    }
+    .coeff-breakdown .MathJax {
+      color: var(--text-secondary);
+    }
+
+    .formula-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem 1rem;
+      margin-top: 1rem;
+    }
+    .formula-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+    .formula-content {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .formula-content .MathJax { color: var(--accent); }
+
+    .latex-render {
+      background: var(--bg-secondary);
+      padding: 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      text-align: center;
+      font-size: 1rem;
+      min-height: 2.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .latex-render .MathJax { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="../index.html" class="back-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back to Tools
+        </a>
+        <a href="../index.html" class="logo">
+          <div class="logo-icon">⚛</div>
+          <span>Partial Wave Analysis Tools</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="calc-page">
+    <div class="container">
+      <div class="calc-header">
+        <h1 class="calc-title">LS → Helicity Amplitude Converter</h1>
+        <p class="calc-subtitle">
+          Express helicity amplitude coefficients H<sub>λ<sub>B</sub>,λ<sub>C</sub></sub> in terms
+          of LS coupling amplitudes g<sub>l,s</sub>
+        </p>
+      </div>
+
+      <div class="calc-grid">
+        <!-- Left: Input -->
+        <div>
+          <div class="calc-card">
+            <div class="calc-card-header">
+              <span class="calc-card-icon">🔢</span>
+              <h3 class="calc-card-title">Decay A → B + C</h3>
+            </div>
+            <div class="calc-card-body">
+              <form id="ls-form">
+                <div class="input-section">
+                  <div class="input-section-title">Spins</div>
+                  <div class="qn-grid">
+                    <div class="form-group">
+                      <label class="form-label" for="Ja">J<sub>A</sub></label>
+                      <div class="stepper" data-target="Ja">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease Ja">−</button>
+                        <input type="text" id="Ja" class="form-input" placeholder="1" value="1" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase Ja">+</button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="Jb">J<sub>B</sub></label>
+                      <div class="stepper" data-target="Jb">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease Jb">−</button>
+                        <input type="text" id="Jb" class="form-input" placeholder="0" value="0" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase Jb">+</button>
+                      </div>
+                    </div>
+                    <div class="form-group">
+                      <label class="form-label" for="Jc">J<sub>C</sub></label>
+                      <div class="stepper" data-target="Jc">
+                        <button type="button" class="stepper-btn" data-step="-1" aria-label="Decrease Jc">−</button>
+                        <input type="text" id="Jc" class="form-input" placeholder="0" value="0" required>
+                        <button type="button" class="stepper-btn" data-step="+1" aria-label="Increase Jc">+</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="btn-group" style="margin-top: 1rem;">
+                  <button type="button" class="btn btn-primary" id="calculate-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M12 6v6l4 2"></path>
+                    </svg>
+                    Generate Formula
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Examples -->
+          <div class="examples-section">
+            <h4 class="examples-title">Load Examples:</h4>
+            <div class="examples-grid">
+              <button type="button" class="example-btn" data-example='simple'>J=1 → 0+0</button>
+              <button type="button" class="example-btn" data-example='half'>J=1/2 → 0+0</button>
+              <button type="button" class="example-btn" data-example='halfhalf'>J=1/2 → 1/2+0</button>
+              <button type="button" class="example-btn" data-example='twoLS'>J=1 → 1/2+1/2</button>
+              <button type="button" class="example-btn" data-example='threeLS'>J=3/2 → 1+1/2</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Results -->
+        <div>
+          <div class="results-panel" id="results-panel">
+            <div class="results-header">
+              <div class="results-status">
+                <span class="status-indicator" id="status-indicator"></span>
+                <span id="status-text">Set spins and click Generate Formula</span>
+              </div>
+            </div>
+            <div class="results-body" id="results-body">
+              <p style="color: var(--text-muted); font-size: 0.875rem;">
+                Results will appear here as LaTeX formulas.
+              </p>
+            </div>
+          </div>
+
+          <!-- Formula Card -->
+          <div class="formula-card">
+            <h4 class="formula-title">Conversion Formula</h4>
+            <div class="formula-content">
+For decay A → B + C, helicity amplitudes expressed via LS coupling:
+
+H<sub>λ<sub>B</sub>,λ<sub>C</sub></sub> = Σ<sub>l,s</sub> g<sub>l,s</sub> · C<sub>l,s</sub><sup>λ<sub>B</sub>,λ<sub>C</sub></sup>
+
+C<sub>l,s</sub><sup>λ<sub>B</sub>,λ<sub>C</sub></sup> = √((2l+1)/(2J<sub>A</sub>+1)) · ⟨J<sub>B</sub>λ<sub>B</sub>; J<sub>C</sub>,-λ<sub>C</sub> | s,δ⟩ · ⟨l,0; s,δ | J<sub>A</sub>,δ⟩
+
+where δ = λ<sub>B</sub> − λ<sub>C</sub> and |δ| ≤ J<sub>A</sub>.
+
+Selection rules:
+<ul style="margin-top:0.25rem;">
+<li>|J<sub>B</sub>−J<sub>C</sub>| ≤ s ≤ J<sub>B</sub>+J<sub>C</sub></li>
+<li>|l−s| ≤ J<sub>A</sub> ≤ l+s</li>
+</ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p><a href="../index.html" class="footer-link">← Back to Tools</a></p>
+    </div>
+  </footer>
+
+  <script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(', '\\)']],
+      displayMath: [['\\[', '\\]']]
+    },
+    options: { enableMenu: true }
+  };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+  <script src="../assets/js/surd.js"></script>
+  <script src="../assets/js/cg.js"></script>
+  <script src="../assets/js/wigner-d.js"></script>
+  <script src="../assets/js/get-angle.js"></script>
+  <script>
+    // ===================================================================
+    // SPIN INPUT SETUP
+    // ===================================================================
+    function setupStepper(targetId) {
+      var container = document.querySelector('.stepper[data-target="' + targetId + '"]');
+      if (!container) return;
+      var input = container.querySelector('.form-input');
+      container.querySelectorAll('.stepper-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var step = parseInt(this.dataset.step, 10);
+          var s = toSpin(input.value || '0');
+          var newNum = s.num + step;
+          var newVal = s.den === 2 ? newNum / 2 : newNum;
+          if (newVal < 0) newVal = 0;
+          input.value = formatSpinValue1(newVal);
+        });
+      });
+    }
+
+    function formatSpinValue1(j) {
+      if (j === 0.5 || j === '1/2') return '1/2';
+      if (j === -0.5 || j === '-1/2') return '-1/2';
+      if (j === 0) return '0';
+      return String(j);
+    }
+
+    setupStepper('Ja');
+    setupStepper('Jb');
+    setupStepper('Jc');
+
+    // ===================================================================
+    // LS COMBINATIONS (Summary display)
+    // ===================================================================
+    function getSpins() {
+      return {
+        Ja: toSpin(document.getElementById('Ja').value || '0'),
+        Jb: toSpin(document.getElementById('Jb').value || '0'),
+        Jc: toSpin(document.getElementById('Jc').value || '0')
+      };
+    }
+
+    // ===================================================================
+    // LATEX HELPERS
+    // ===================================================================
+    function spinToLatex(s) {
+      if (s.den === 1) return String(s.num);
+      if (s.num === 1 && s.den === 2) return '\\frac{1}{2}';
+      if (s.num === -1 && s.den === 2) return '-\\frac{1}{2}';
+      return '\\frac{' + s.num + '}{' + s.den + '}';
+    }
+
+    // ===================================================================
+    // CALCULATION — formula generation
+    // ===================================================================
+    function calculate() {
+      var spins = getSpins();
+      var Ja_val = spins.Ja.value;
+      var Jb_val = spins.Jb.value;
+      var Jc_val = spins.Jc.value;
+
+      var statusIndicator = document.getElementById('status-indicator');
+      var statusText = document.getElementById('status-text');
+      var resultsBody = document.getElementById('results-body');
+
+      // Get LS pairs
+      var lsPairs = getLSCombinations(Ja_val, Jb_val, Jc_val);
+      if (lsPairs.length === 0) {
+        statusIndicator.className = 'status-indicator error';
+        statusText.textContent = 'No valid LS combinations';
+        resultsBody.innerHTML = '<p style="color: var(--text-muted);">No valid (l,s) pairs for these spins.</p>';
+        return;
+      }
+
+      // Get helicity pairs
+      var helicitiesB = getHelicities(Jb_val);
+      var helicitiesC = getHelicities(Jc_val);
+
+      statusIndicator.className = 'status-indicator';
+      statusText.textContent = 'Generating formulas...';
+      resultsBody.innerHTML = '<p style="color: var(--text-muted);" class="loading">Computing...</p>';
+
+      setTimeout(function() {
+        try {
+          // First build the LS summary line
+          var lsSummaryLatex = '';
+          for (var i = 0; i < lsPairs.length; i++) {
+            if (i > 0) lsSummaryLatex += ', ';
+            lsSummaryLatex += '(l=' + lsPairs[i].l + ', s=' + spinToLatex(toSpin(lsPairs[i].s)) + ')';
+          }
+
+          // For each helicity combination, build the formula
+          var hResults = [];
+          var helicityCount = 0;
+
+          for (var ib = 0; ib < helicitiesB.length; ib++) {
+            var lb = helicitiesB[ib].value;
+            for (var ic = 0; ic < helicitiesC.length; ic++) {
+              var lc = helicitiesC[ic].value;
+              var delta = lb - lc;
+              if (Math.abs(delta) > Ja_val + 1e-10) continue;
+
+              var terms = [];
+              var hasTerm = false;
+              var allZero = true;
+
+              for (var p = 0; p < lsPairs.length; p++) {
+                var l = lsPairs[p].l;
+                var s = lsPairs[p].s;
+
+                var cg1 = computeCGExact(formatSpin(toSpin(Jb_val)), formatSpin(toSpin(lb)),
+                                        formatSpin(toSpin(Jc_val)), formatSpin(toSpin(-lc)),
+                                        formatSpin(toSpin(s)), formatSpin(toSpin(delta)));
+                if (!cg1 || cg1.isZero()) continue;
+
+                var cg2 = computeCGExact(String(l), '0',
+                                        formatSpin(toSpin(s)), formatSpin(toSpin(delta)),
+                                        formatSpin(toSpin(Ja_val)), formatSpin(toSpin(delta)));
+                if (!cg2 || cg2.isZero()) continue;
+
+                var sqrtPart = Surd.div(Surd.fromRadicand(2 * l + 1),
+                                        Surd.fromRadicand(Math.round(2 * Ja_val) + 1));
+                var coeff = Surd.mul(Surd.mul(sqrtPart, cg1), cg2);
+                if (coeff.isZero()) continue;
+
+                allZero = false;
+                var coeffLatex = coeff.toLatex();
+
+                // Build CG string for display
+                var cg1Latex = '\\langle ' + spinToLatex(toSpin(Jb_val)) + ',' + spinToLatex(toSpin(lb)) + '; '
+                                    + spinToLatex(toSpin(Jc_val)) + ',' + spinToLatex(toSpin(-lc)) + ' \\mid '
+                                    + spinToLatex(toSpin(s)) + ',' + spinToLatex(toSpin(delta)) + '\\rangle';
+                var cg2Latex = '\\langle ' + l + ',0; '
+                                    + spinToLatex(toSpin(s)) + ',' + spinToLatex(toSpin(delta)) + ' \\mid '
+                                    + spinToLatex(toSpin(Ja_val)) + ',' + spinToLatex(toSpin(delta)) + '\\rangle';
+
+                var factorLatex = '\\sqrt{\\frac{' + (2*l+1) + '}{' + (Math.round(2*Ja_val)+1) + '}}';
+
+                terms.push({
+                  l: l, s: s,
+                  coeffSurd: coeff,
+                  coeffLatex: coeffLatex,
+                  factorLatex: factorLatex,
+                  cg1Latex: cg1Latex,
+                  cg2Latex: cg2Latex
+                });
+              }
+
+              if (allZero) continue;
+              helicityCount++;
+
+              // Build the full LaTeX expression
+              var parts = [];
+              for (var t = 0; t < terms.length; t++) {
+                var c = terms[t];
+                var sign = '';
+                if (t > 0) {
+                  sign = c.coeffLatex.indexOf('-') === 0 ? ' - ' : ' + ';
+                } else if (c.coeffLatex.indexOf('-') === 0) {
+                  sign = '-';
+                }
+
+                var coeffAbs = c.coeffLatex.indexOf('-') === 0 ? c.coeffLatex.substring(1) : c.coeffLatex;
+
+                // Format: g_{l,s} × coeff
+                var gLatex = 'g_{' + c.l + ',' + spinToLatex(toSpin(c.s)) + '}';
+
+                var termLatex;
+                if (coeffAbs === '1') {
+                  termLatex = gLatex;
+                } else {
+                  termLatex = coeffAbs + '\\, ' + gLatex;
+                }
+
+                parts.push(sign + termLatex);
+              }
+
+              var fullLatex = 'H_{' + spinToLatex(toSpin(lb)) + ',' + spinToLatex(toSpin(lc)) + '} = ' + parts.join(' ');
+
+              hResults.push({
+                lb: lb, lc: lc,
+                lbLatex: spinToLatex(toSpin(lb)),
+                lcLatex: spinToLatex(toSpin(lc)),
+                delta: delta,
+                fullLatex: fullLatex,
+                terms: terms,
+                nTerms: terms.length
+              });
+            }
+          }
+
+          if (hResults.length === 0) {
+            statusIndicator.className = 'status-indicator error';
+            statusText.textContent = 'All helicity amplitudes vanish';
+            resultsBody.innerHTML = '<p style="color: var(--text-muted);">No non-zero helicity amplitudes for these spins.</p>';
+            return;
+          }
+
+          // Render results
+          var html = '';
+
+          // LS summary
+          html += '<div class="formula-display">';
+          html += '<div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:0.5rem;">Valid LS Channels</div>';
+          html += '<div>\\(' + lsSummaryLatex + '\\)</div>';
+          html += '</div>';
+
+          // Per-helicity formulas
+          html += '<div class="result-section">';
+          html += '<h4>Helicity Amplitudes (' + hResults.length + ')</h4>';
+
+          for (var i = 0; i < hResults.length; i++) {
+            var hr = hResults[i];
+
+            html += '<div class="helicity-card">';
+            html += '<div><span class="h-label">H<sub>' + hr.lbLatex + ',' + hr.lcLatex + '</sub></span>';
+            html += '  δ = \\( ' + spinToLatex(toSpin(hr.delta)) + ' \\)</div>';
+
+            html += '<div class="h-expr">\\(' + hr.fullLatex + '\\)</div>';
+
+            // Detailed coefficient breakdown
+            html += '<div class="coeff-breakdown">';
+            for (var t = 0; t < hr.terms.length; t++) {
+              var c = hr.terms[t];
+              html += '<div style="margin-top:0.4rem;font-size:0.75rem;">';
+              html += '<span class="ls-badge">l=' + c.l + ', s=' + spinToLatex(toSpin(c.s)) + '</span> ';
+              html += '<span style="color:var(--text-muted);">Coefficient = </span>';
+              html += '\\(' + c.factorLatex + ' \\times ' + c.cg1Latex + ' \\times ' + c.cg2Latex + ' = ' + c.coeffLatex + '\\)';
+              html += '</div>';
+            }
+            html += '</div>';
+
+            html += '</div>';
+          }
+
+          html += '</div>';
+
+          resultsBody.innerHTML = html;
+          statusIndicator.className = 'status-indicator success';
+          statusText.textContent = hResults.length + ' helicity amplitude formula(s)';
+
+          // Typeset
+          if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+            MathJax.typesetPromise([resultsBody]).catch(function(err) {});
+          }
+
+        } catch (e) {
+          showError('Computation error: ' + (e.message || e));
+        }
+      }, 10);
+    }
+
+    function showError(msg) {
+      var statusIndicator = document.getElementById('status-indicator');
+      var statusText = document.getElementById('status-text');
+      var resultsBody = document.getElementById('results-body');
+      statusIndicator.className = 'status-indicator error';
+      statusText.textContent = 'Error';
+      resultsBody.innerHTML = '<p style="color: var(--error);">' + msg + '</p>';
+    }
+
+    // ===================================================================
+    // EXAMPLES
+    // ===================================================================
+    function loadExample(name) {
+      switch (name) {
+        case 'simple':
+          document.getElementById('Ja').value = '1';
+          document.getElementById('Jb').value = '0';
+          document.getElementById('Jc').value = '0';
+          break;
+        case 'half':
+          document.getElementById('Ja').value = '1/2';
+          document.getElementById('Jb').value = '0';
+          document.getElementById('Jc').value = '0';
+          break;
+        case 'halfhalf':
+          document.getElementById('Ja').value = '1/2';
+          document.getElementById('Jb').value = '1/2';
+          document.getElementById('Jc').value = '0';
+          break;
+        case 'twoLS':
+          document.getElementById('Ja').value = '1';
+          document.getElementById('Jb').value = '1/2';
+          document.getElementById('Jc').value = '1/2';
+          break;
+        case 'threeLS':
+          document.getElementById('Ja').value = '3/2';
+          document.getElementById('Jb').value = '1';
+          document.getElementById('Jc').value = '1/2';
+          break;
+      }
+      document.getElementById('calculate-btn').focus();
+    }
+
+    // ===================================================================
+    // EVENTS
+    // ===================================================================
+    document.getElementById('calculate-btn').addEventListener('click', calculate);
+
+    document.querySelectorAll('.example-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        loadExample(this.dataset.example);
+      });
+    });
+  </script>
+</body>
+</html>
