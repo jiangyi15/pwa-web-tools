@@ -819,7 +819,8 @@ function getAngleFormulaSimplified(decayTree) {
   return {
     helicities: result,
     nDecays: nDecays,
-    angles: angles
+    angles: angles,
+    chiInfo: phiCombine ? '\\phi_{' + phiCombine.removeIdx + '} + \\phi_{' + phiCombine.renameIdx + '}' : null
   };
 }
 
