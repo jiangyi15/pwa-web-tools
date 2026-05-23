@@ -247,6 +247,9 @@
                 <span class="status-indicator" id="status-indicator"></span>
                 <span id="status-text">Build a decay tree and click Calculate</span>
               </div>
+              <button type="button" class="btn btn-secondary btn-small" id="download-latex-btn" style="display:none;flex-shrink:0;">
+                ↓ LaTeX
+              </button>
             </div>
             <div class="results-body" id="results-body">
               <p style="color: var(--text-muted); font-size: 0.875rem;">
@@ -316,6 +319,10 @@ Selection rules:
 
     // Node path tracking for UI updates
     var nodeId = 0;
+
+    // Last results for LaTeX download
+    var _lastResults = null;
+    var _lastBatch = false;
 
     function createNode(j, children) {
       return { j: j || 0, children: children || null };
@@ -492,6 +499,8 @@ Selection rules:
       renderTree();
       clearResults();
     });
+
+    document.getElementById('download-latex-btn').addEventListener('click', downloadLatex);
 
     document.querySelectorAll('.example-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
@@ -687,6 +696,11 @@ Selection rules:
       if (batch) statusMsg += ' across ' + results.length + ' spin combination(s)';
       statusText.textContent = statusMsg;
 
+      // Store for LaTeX download
+      _lastResults = results;
+      _lastBatch = batch;
+      document.getElementById('download-latex-btn').style.display = '';
+
       var html = '';
       for (var i = 0; i < results.length; i++) {
         var r = results[i];
@@ -760,12 +774,105 @@ Selection rules:
       document.getElementById('status-indicator').className = 'status-indicator error';
       document.getElementById('status-text').textContent = 'Error';
       document.getElementById('results-body').innerHTML = '<div class="result-error"><strong>⚠️ Error</strong><br>' + msg + '</div>';
+      document.getElementById('download-latex-btn').style.display = 'none';
     }
 
     function clearResults() {
       document.getElementById('status-indicator').className = 'status-indicator';
       document.getElementById('status-text').textContent = 'Build a decay tree and click Calculate';
       document.getElementById('results-body').innerHTML = '<p style="color: var(--text-muted); font-size: 0.875rem;">Results will appear here after calculation.</p>';
+      document.getElementById('download-latex-btn').style.display = 'none';
+    }
+
+    // ===================================================================
+    // LATEX DOCUMENT GENERATION & DOWNLOAD
+    // ===================================================================
+    function helicityLatex(hStr) {
+      // hStr is "la,lb,lc" like "0,1,-1"
+      var parts = hStr.split(',');
+      return parts[0] + ',' + parts[1] + ',' + parts[2];
+    }
+
+    function lsLatex(lsStr) {
+      // lsStr is "l,s" like "1,0.5"
+      return lsStr.replace(',', ',');
+    }
+
+    function generateLatexDocument() {
+      if (!_lastResults) return '';
+      var results = _lastResults;
+      var batch = _lastBatch;
+
+      var lines = [];
+      lines.push('\\documentclass{article}');
+      lines.push('\\usepackage{amsmath}');
+      lines.push('\\usepackage{amsfonts}');
+      lines.push('\\usepackage[a4paper,margin=2.5cm]{geometry}');
+      lines.push('');
+      lines.push('\\title{Angular Formulas for Particle Decay}');
+      lines.push('\\date{}');
+      lines.push('\\begin{document}');
+      lines.push('\\maketitle');
+      lines.push('');
+
+      for (var ri = 0; ri < results.length; ri++) {
+        var r = results[ri];
+        if (r.error || !r.result) continue;
+
+        if (batch) {
+          lines.push('\\subsection*{' + r.label.replace(/</g, '\\textless ').replace(/>/g, '\\textgreater ') + '}');
+        }
+
+        var hs = Object.keys(r.result.helicities).sort();
+        var alignLines = [];
+
+        for (var hi = 0; hi < hs.length; hi++) {
+          var h = hs[hi];
+          var lsDict = r.result.helicities[h];
+          var lss = Object.keys(lsDict).sort();
+
+          for (var lj = 0; lj < lss.length; lj++) {
+            var ls = lss[lj];
+            var c = lsDict[ls];
+            var latexExpr = complexToLatex(c);
+
+            var hLabel = h.replace(/,/g, '\\,'); // "1/2,-1/2" -> "1/2,-1/2"
+            var lsLabel = ls.replace(',', ',');    // "1,0.5" -> "1,0.5"
+
+            alignLines.push('H_{' + hLabel + '}^{(' + lsLabel + ')} &= ' + latexExpr + ' \\\\');
+          }
+        }
+
+        if (alignLines.length > 0) {
+          // Remove trailing \\ from last line
+          var lastIdx = alignLines.length - 1;
+          alignLines[lastIdx] = alignLines[lastIdx].replace(' \\\\', '');
+          lines.push('\\begin{align*}');
+          for (var ai = 0; ai < alignLines.length; ai++) {
+            lines.push('  ' + alignLines[ai]);
+          }
+          lines.push('\\end{align*}');
+          lines.push('');
+        }
+      }
+
+      lines.push('\\end{document}');
+      return lines.join('\n');
+    }
+
+    function downloadLatex() {
+      var content = generateLatexDocument();
+      if (!content) return;
+
+      var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'angular-formulas.tex';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
     function escapeHtml(s) {
