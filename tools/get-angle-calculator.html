@@ -541,9 +541,7 @@ Selection rules:
       statusText.textContent = 'Found ' + nHelicities + ' helicity combination(s)';
       
       // Build results table
-      var html = '<div class="result-item"><div class="result-label">Angles: ' + result.angles.map(function(a) { return '\\(' + a + '\\)'; }).join('; ') + '</div></div>';
-
-      html += '<div class="result-item"><div class="result-label">Angular Formulas</div>';
+      var html = '<div class="result-item"><div class="result-label">Angular Formulas</div>';
       html += '<table class="result-table"><thead><tr><th>λ</th><th>LS</th><th>T(φ,θ)</th></tr></thead><tbody>';
       
       var hs = Object.keys(result.helicities).sort();
@@ -596,10 +594,10 @@ Selection rules:
       }
       
       if (realPart === '0' || realPart === '') {
-        return '(' + imagPart + ')i';
+        return 'i(' + imagPart + ')';
       }
       
-      return realPart + ' + (' + imagPart + ')i';
+      return realPart + ' + i(' + imagPart + ')';
     }
     
     // Convert plaintext math expression to LaTeX
