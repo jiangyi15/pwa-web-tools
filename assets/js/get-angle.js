@@ -673,8 +673,6 @@ function getAngleFormulaSimplified(decayTree) {
   for (var i = 0; i < nDecays; i++) {
     if (phiCombine && i === phiCombine.removeIdx) {
       phiNamesMap[i] = '0';           // fixed to zero
-    } else if (phiCombine && i === phiCombine.renameIdx) {
-      phiNamesMap[i] = 'phi_' + phiCombine.removeIdx + '+phi_' + phiCombine.renameIdx;
     } else {
       phiNamesMap[i] = 'phi_' + i;
     }
@@ -809,8 +807,6 @@ function getAngleFormulaSimplified(decayTree) {
   for (var i = 0; i < nDecays; i++) {
     if (phiCombine && i === phiCombine.removeIdx) {
       angles.push('\\theta_' + i);             // only theta (phi fixed to 0)
-    } else if (phiCombine && i === phiCombine.renameIdx) {
-      angles.push('(\\phi_{' + phiCombine.removeIdx + '} + \\phi_{' + phiCombine.renameIdx + '}), \\theta_' + i);
     } else {
       angles.push('\\phi_' + i + ', \\theta_' + i);
     }
