@@ -313,6 +313,7 @@
           <button class="btn btn-secondary btn-small" onclick="addChildToRoot()">+ Add Decay</button>
           <button class="btn btn-secondary btn-small" onclick="resetTree()">Reset</button>
           <button class="btn btn-secondary btn-small" onclick="resetCamera()">Reset View</button>
+          <button class="btn btn-secondary btn-small" onclick="resetDirection()">Reset Dir</button>
         </div>
       </div>
 
@@ -750,6 +751,15 @@
       controls.update();
     }
     window.resetCamera = resetCamera;
+
+    // ── Reset view direction while keeping the current center ──
+    function resetDirection() {
+      var t = controls.target;
+      camera.position.set(t.x + 6, t.y + 5, t.z + 8);
+      camera.lookAt(t);
+      controls.update();
+    }
+    window.resetDirection = resetDirection;
 
     // ── Center camera on a specific decay vertex ──
     // path can be an array (e.g. []) or a string key (e.g. '')
