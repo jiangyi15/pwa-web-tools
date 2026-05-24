@@ -313,7 +313,10 @@
           <button class="btn btn-secondary btn-small" onclick="addChildToRoot()">+ Add Decay</button>
           <button class="btn btn-secondary btn-small" onclick="resetTree()">Reset</button>
           <button class="btn btn-secondary btn-small" onclick="resetCamera()">Reset View</button>
-          <button class="btn btn-secondary btn-small" onclick="resetDirection()">Reset Dir</button>
+          <span style="font-size:0.65rem;color:var(--text-muted);align-self:center;">View:</span>
+          <button class="btn btn-secondary btn-small" onclick="resetViewX()">X</button>
+          <button class="btn btn-secondary btn-small" onclick="resetViewY()">Y</button>
+          <button class="btn btn-secondary btn-small" onclick="resetViewZ()">Z</button>
         </div>
       </div>
 
@@ -752,14 +755,22 @@
     }
     window.resetCamera = resetCamera;
 
-    // ── Reset view direction while keeping the current center ──
-    function resetDirection() {
+    // ── View from axis directions (keep current center) ──
+    function setView(dx, dy, dz) {
       var t = controls.target;
-      camera.position.set(t.x + 6, t.y + 5, t.z + 8);
-      camera.lookAt(t);
+      // Disable damping temporarily so the position snaps immediately
+      var wasDamping = controls.enableDamping;
+      controls.enableDamping = false;
+      camera.position.set(t.x + dx, t.y + dy, t.z + dz);
       controls.update();
+      controls.enableDamping = wasDamping;
     }
-    window.resetDirection = resetDirection;
+    function resetViewX() { setView(8, 0.5, 0.5); }
+    function resetViewY() { setView(0.5, 8, 0.5); }
+    function resetViewZ() { setView(0.5, 0.5, 8); }
+    window.resetViewX = resetViewX;
+    window.resetViewY = resetViewY;
+    window.resetViewZ = resetViewZ;
 
     // ── Center camera on a specific decay vertex ──
     // path can be an array (e.g. []) or a string key (e.g. '')
