@@ -756,17 +756,18 @@
     window.resetCamera = resetCamera;
 
     // ── View along plane normals (keep current center) ──
-    function setView(dx, dy, dz) {
+    function setView(dx, dy, dz, upX, upY, upZ) {
       var t = controls.target;
       var wasDamping = controls.enableDamping;
       controls.enableDamping = false;
+      if (upX !== undefined) camera.up.set(upX, upY, upZ);
       camera.position.set(t.x + dx, t.y + dy, t.z + dz);
       controls.update();
       controls.enableDamping = wasDamping;
     }
-    function resetViewXY() { setView(0.5, 0.5, 8); }  // camera on Z → see XY plane
-    function resetViewXZ() { setView(0.5, 8, 0.5); }  // camera on Y → see XZ plane
-    function resetViewYZ() { setView(8, 0.5, 0.5); }  // camera on X → see YZ plane
+    function resetViewXY() { camera.up.set(0, 1, 0); setView(0, 0, 8); }           // +Z, up=Y
+    function resetViewXZ() { camera.up.set(0, 0, -1); setView(0, 8, 0); }           // +Y, up=-Z
+    function resetViewYZ() { camera.up.set(0, 1, 0); setView(8, 0, 0); }           // +X, up=Y
     window.resetViewXY = resetViewXY;
     window.resetViewXZ = resetViewXZ;
     window.resetViewYZ = resetViewYZ;
