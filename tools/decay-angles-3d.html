@@ -314,9 +314,9 @@
           <button class="btn btn-secondary btn-small" onclick="resetTree()">Reset</button>
           <button class="btn btn-secondary btn-small" onclick="resetCamera()">Reset View</button>
           <span style="font-size:0.65rem;color:var(--text-muted);align-self:center;">View:</span>
-          <button class="btn btn-secondary btn-small" onclick="resetViewX()">X</button>
-          <button class="btn btn-secondary btn-small" onclick="resetViewY()">Y</button>
-          <button class="btn btn-secondary btn-small" onclick="resetViewZ()">Z</button>
+          <button class="btn btn-secondary btn-small" onclick="resetViewXY()">XY</button>
+          <button class="btn btn-secondary btn-small" onclick="resetViewXZ()">XZ</button>
+          <button class="btn btn-secondary btn-small" onclick="resetViewYZ()">YZ</button>
         </div>
       </div>
 
@@ -755,22 +755,21 @@
     }
     window.resetCamera = resetCamera;
 
-    // ── View from axis directions (keep current center) ──
+    // ── View along plane normals (keep current center) ──
     function setView(dx, dy, dz) {
       var t = controls.target;
-      // Disable damping temporarily so the position snaps immediately
       var wasDamping = controls.enableDamping;
       controls.enableDamping = false;
       camera.position.set(t.x + dx, t.y + dy, t.z + dz);
       controls.update();
       controls.enableDamping = wasDamping;
     }
-    function resetViewX() { setView(8, 0.5, 0.5); }
-    function resetViewY() { setView(0.5, 8, 0.5); }
-    function resetViewZ() { setView(0.5, 0.5, 8); }
-    window.resetViewX = resetViewX;
-    window.resetViewY = resetViewY;
-    window.resetViewZ = resetViewZ;
+    function resetViewXY() { setView(0.5, 0.5, 8); }  // camera on Z → see XY plane
+    function resetViewXZ() { setView(0.5, 8, 0.5); }  // camera on Y → see XZ plane
+    function resetViewYZ() { setView(8, 0.5, 0.5); }  // camera on X → see YZ plane
+    window.resetViewXY = resetViewXY;
+    window.resetViewXZ = resetViewXZ;
+    window.resetViewYZ = resetViewYZ;
 
     // ── Center camera on a specific decay vertex ──
     // path can be an array (e.g. []) or a string key (e.g. '')
