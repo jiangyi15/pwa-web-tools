@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Angular Formula Calculator - Compute angular formulas for particle decay chains.">
-  <title>Angular Formula Calculator | Partial Wave Analysis Tools</title>
+  <meta name="description" content="Angular Distribution Calculator - Compute I(θ,φ) = Σ|T|² from helicity amplitudes with Fourier expansion in φ.">
+  <title>Angular Distribution Calculator | Partial Wave Analysis Tools</title>
   <link rel="stylesheet" href="../assets/css/style.css">
   <style>
     .input-section {
@@ -179,7 +179,7 @@
         </a>
         <a href="../index.html" class="logo">
           <div class="logo-icon">⚛</div>
-          <span>Partial Wave Analysis Tools</span>
+            <span>Angular Distribution Calculator</span>
         </a>
       </div>
     </div>
@@ -188,9 +188,9 @@
   <main class="calc-page">
     <div class="container">
       <div class="calc-header">
-        <h1 class="calc-title">Angular Formula Calculator</h1>
+        <h1 class="calc-title">Angular Distribution Calculator</h1>
         <p class="calc-subtitle">
-          Compute angular formulas for particle decay chains using Wigner D-functions and Clebsch-Gordan coefficients
+          Compute I(θ,φ) = Σ|T|² from helicity amplitudes with Fourier expansion in φ
         </p>
       </div>
 
@@ -264,22 +264,22 @@
           <!-- Formula Card -->
           <div class="formula-section">
             <div class="formula-card">
-              <h4 class="formula-title">Helicity Amplitude Formula</h4>
+              <h4 class="formula-title">Angular Distribution I(θ,φ)</h4>
               <div class="formula-content" style="font-size: 0.8125rem;">
-For decay A → B + C, the angular part of the helicity amplitude is:
+The angular distribution is:
 
-T<sub>l,s</sub> = √((2l+1)/(2J<sub>A</sub>+1)) × CG(J<sub>B</sub>,λ<sub>B</sub>; J<sub>C</sub>,-λ<sub>C</sub> | s,δ) × CG(l,0; s,δ | J<sub>A</sub>,δ) × D<sup>J<sub>A</sub>*</sup><sub>λ<sub>A</sub>,δ</sub>(φ,θ)
+I(θ,φ) = Σ<sub>λ,l,s</sub> |T<sub>l,s</sub>|²
 
-where:
-• δ = λ<sub>B</sub> - λ<sub>C</sub>
-• l = orbital angular momentum (integer)
-• s = total spin of B+C system
-• D<sup>*</sup> = Wigner D-matrix conjugate
+where T is the helicity amplitude from the <strong>Angular Formula Calculator</strong>, and |T|² = (Re)² + (Im)².
 
-Selection rules:
-• |J<sub>B</sub>-J<sub>C</sub>| ≤ s ≤ J<sub>B</sub>+J<sub>C</sub>
-• |l-s| ≤ J<sub>A</sub> ≤ l+s
-• |δ| ≤ J<sub>A</sub>
+<b>Per-LS decomposition:</b>
+
+I<sub>(l,s)</sub>(θ,φ) = Σ<sub>m</sub> A<sub>m</sub>(θ) · cos(mφ) + B<sub>m</sub>(θ) · sin(mφ)
+
+with A<sub>m</sub>(θ) expressed in sin<sup>p</sup>(θ/2)·cos<sup>q</sup>(θ/2) form.
+
+<b>Fourier expansion in φ:</b>
+Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/sin Fourier modes.
               </div>
             </div>
           </div>
@@ -323,9 +323,7 @@ Selection rules:
     // Node path tracking for UI updates
     var nodeId = 0;
 
-    // Last results for LaTeX download
-    var _lastResults = null;
-    var _lastBatch = false;
+    // Last result for LaTeX download (now handled by _lastBatchResults)
 
     function createNode(j, children) {
       return { j: j || 0, children: children || null };
@@ -505,13 +503,13 @@ Selection rules:
       clearResults();
     });
 
-    document.getElementById('download-latex-btn').addEventListener('click', downloadLatex);
-
     document.querySelectorAll('.example-btn').forEach(function(btn) {
       btn.addEventListener('click', function() {
         loadExample(this.dataset.example);
       });
     });
+
+    document.getElementById('download-latex-btn').addEventListener('click', downloadDistributionLatex);
 
     // ===================================================================
     // BATCH MODE — comma-separated J values
@@ -638,6 +636,10 @@ Selection rules:
       return 'J(' + parts.join(',\\ ') + ')';
     }
 
+    // ===================================================================
+    // COMPUTE ANGULAR DISTRIBUTION
+    // ===================================================================
+
     function calculate() {
       if (!decayTree.children) {
         showError('Root particle must decay. Click "Final" to make it decay.');
@@ -650,7 +652,7 @@ Selection rules:
       
       statusIndicator.className = 'status-indicator';
       statusText.textContent = 'Computing...';
-      resultsBody.innerHTML = '<p style="color: var(--text-muted);" class="loading">Computing angular formulas...</p>';
+      resultsBody.innerHTML = '<p style="color: var(--text-muted);" class="loading">Computing angular distribution...</p>';
 
       // Check batch mode
       var batch = isBatchMode();
@@ -681,7 +683,7 @@ Selection rules:
 
           for (var bi = 0; bi < batchTrees.length; bi++) {
             try {
-              var result = getAngleFormulaSimplified(batchTrees[bi].tree);
+              var result = computeAngularDistribution(batchTrees[bi].tree);
               if (result && !result.error) {
                 results.push({ label: batchTrees[bi].label, latexLabel: batchTrees[bi].latexLabel, result: result, error: null });
                 nOk++;
@@ -700,34 +702,37 @@ Selection rules:
             return;
           }
 
-          showBatchResults(results, batch);
+          showBatchDistributionResults(results, batch);
         } catch (e) {
           showError('Computation error: ' + (e.message || e));
         }
       }, 10);
     }
 
-    function showBatchResults(results, batch) {
+    // ── Batch results store (for LaTeX download) ──
+    var _lastBatchResults = null;
+    var _lastBatch = false;
+
+    function showBatchDistributionResults(results, batch) {
       var statusIndicator = document.getElementById('status-indicator');
       var statusText = document.getElementById('status-text');
       var resultsBody = document.getElementById('results-body');
 
-      var totalHelicities = 0;
+      _lastBatchResults = results;
+      _lastBatch = batch;
+      document.getElementById('download-latex-btn').style.display = '';
+
+      var totalLS = 0;
       for (var i = 0; i < results.length; i++) {
         if (results[i].result) {
-          totalHelicities += Object.keys(results[i].result.helicities).length;
+          totalLS += Object.keys(results[i].result.lsMap).length;
         }
       }
 
       statusIndicator.className = 'status-indicator success';
-      var statusMsg = totalHelicities + ' helicity amplitude(s)';
+      var statusMsg = totalLS + ' LS component(s)';
       if (batch) statusMsg += ' across ' + results.length + ' spin combination(s)';
       statusText.textContent = statusMsg;
-
-      // Store for LaTeX download
-      _lastResults = results;
-      _lastBatch = batch;
-      document.getElementById('download-latex-btn').style.display = '';
 
       var html = '';
       for (var i = 0; i < results.length; i++) {
@@ -738,32 +743,23 @@ Selection rules:
           if (i > 0) html += 'border-top:1px solid var(--border);padding-top:0.75rem;';
           html += '">';
           html += '<div style="font-size:0.8rem;font-weight:600;color:var(--accent);margin-bottom:0.5rem;">';
-          html += 'J(' + r.label + ')';
+          html += r.label;
           html += '</div>';
         }
 
         if (r.error) {
           html += '<p style="color: var(--error); font-size: 0.85rem;">✗ ' + escapeHtml(r.error) + '</p>';
-        } else {
-          var nHel = Object.keys(r.result.helicities).length;
-          if (nHel === 0) {
-            html += '<p style="color: var(--text-muted); font-size: 0.85rem;">No valid helicity combinations.</p>';
-          } else {
-            html += '<table class="result-table"><thead><tr><th>λ</th><th>LS</th><th>T(φ,θ)</th></tr></thead><tbody>';
-            var hs = Object.keys(r.result.helicities).sort();
-            for (var hi = 0; hi < hs.length; hi++) {
-              var h = hs[hi];
-              var lsDict = r.result.helicities[h];
-              var lss = Object.keys(lsDict).sort();
-              for (var lj = 0; lj < lss.length; lj++) {
-                var ls = lss[lj];
-                var c = lsDict[ls];
-                var latexExpr = complexToLatex(c);
-                html += '<tr><td>(' + h + ')</td><td>(' + ls + ')</td><td><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div></td></tr>';
-              }
-            }
-            html += '</tbody></table>';
+        } else if (r.result) {
+          var lsKeys = Object.keys(r.result.lsMap).sort();
+          html += '<table class="result-table"><thead><tr><th>LS (l,s)</th><th>I<sub>(l,s)</sub>(θ,φ)</th></tr></thead><tbody>';
+          for (var li = 0; li < lsKeys.length; li++) {
+            var lk = lsKeys[li];
+            var fourier = r.result.lsMap[lk].fourier;
+            var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+            if (!latexExpr) latexExpr = '0';
+            html += '<tr><td>(' + lk + ')</td><td><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div></td></tr>';
           }
+          html += '</tbody></table>';
         }
 
         if (batch) html += '</div>';
@@ -771,7 +767,6 @@ Selection rules:
 
       resultsBody.innerHTML = html;
 
-      // Render LaTeX in cells
       if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
         var spans = resultsBody.querySelectorAll('.latex-cell');
         for (var i = 0; i < spans.length; i++) {
@@ -781,27 +776,11 @@ Selection rules:
         MathJax.typesetPromise(spans).catch(function(err) {});
       }
     }
-    
-    function complexToLatex(c) {
-      // formulas from getAngleFormulaSimplified are already LaTeX
-      var realPart = c.real;
-      var imagPart = c.imag;
-      
-      if (imagPart === '0' || imagPart === '') {
-        return realPart;
-      }
-      
-      if (realPart === '0' || realPart === '') {
-        return 'i(' + imagPart + ')';
-      }
-      
-      return realPart + ' + i(' + imagPart + ')';
-    }
 
     function showError(msg) {
       document.getElementById('status-indicator').className = 'status-indicator error';
       document.getElementById('status-text').textContent = 'Error';
-      document.getElementById('results-body').innerHTML = '<div class="result-error"><strong>⚠️ Error</strong><br>' + msg + '</div>';
+      document.getElementById('results-body').innerHTML = '<div class="result-error"><strong>Error</strong><br>' + msg + '</div>';
       document.getElementById('download-latex-btn').style.display = 'none';
     }
 
@@ -812,23 +791,467 @@ Selection rules:
       document.getElementById('download-latex-btn').style.display = 'none';
     }
 
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ANGULAR DISTRIBUTION |T|² COMPUTATION
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    function computeAngularDistribution(tree) {
+      if (!tree.children) return { error: 'Root must decay.' };
+
+      var vertices = getVertices(tree);
+      var nDecays = vertices.length;
+
+      // Detect J=0 root decay: both child phi terms share the same exponent,
+      // so we can fix φ₁=0 and rename φ₂→χ (one fewer azimuthal variable).
+      var phiCombine = null;
+      if (nDecays >= 3 &&
+          toSpin(vertices[0].Ja).value === 0 &&
+          tree.children && tree.children[0] && tree.children[1] &&
+          tree.children[0].children && tree.children[1].children) {
+        var c0size = countDecayVertices(tree.children[0]);
+        phiCombine = { removeIdx: 1, renameIdx: 1 + c0size };
+      }
+
+      // Build structured vertex terms
+      var thetaIdx = 0, phiIdx = 0;
+      var vertexTerms = [];
+      for (var vi = 0; vi < vertices.length; vi++) {
+        vertexTerms.push(_buildVertexStructTerms(vertices[vi], thetaIdx, phiIdx));
+        thetaIdx++;
+        phiIdx++;
+      }
+
+      // Combine across cascade
+      var combined = _combineStructured(vertexTerms, tree, 0);
+
+      // Collect all helicity keys and LS keys
+      var allHK = Object.keys(combined);
+      if (allHK.length === 0) return { error: 'No valid helicity combinations.' };
+
+      var allLS = {};
+      for (var hi = 0; hi < allHK.length; hi++) {
+        var lsKeys = Object.keys(combined[allHK[hi]]);
+        for (var li = 0; li < lsKeys.length; li++) {
+          allLS[lsKeys[li]] = true;
+        }
+      }
+      var lsKeyList = Object.keys(allLS).sort();
+
+      // For each LS key, accumulate |T|² contributions from all helicities
+      var lsMap = {};
+      for (var li = 0; li < lsKeyList.length; li++) {
+        lsMap[lsKeyList[li]] = { fourier: {} };
+      }
+
+      for (var hi = 0; hi < allHK.length; hi++) {
+        var hk = allHK[hi];
+        var lsDict = combined[hk];
+
+        for (var li = 0; li < lsKeyList.length; li++) {
+          var lk = lsKeyList[li];
+          var terms = lsDict[lk];
+          if (!terms) continue;
+
+          // Expand terms for distribution
+          var tSums = expandTermsForDistribution(terms);
+
+          // |T|² = sum over term pairs with matching im flags
+          var pairTerms = crossMultiplyTerms(tSums);
+
+          // Accumulate into LS distribution
+          for (var pi = 0; pi < pairTerms.length; pi++) {
+            addTermToFourier(lsMap[lk].fourier, pairTerms[pi], phiCombine);
+          }
+        }
+      }
+
+      return { lsMap: lsMap, nDecays: nDecays, phiCombine: phiCombine };
+    }
+
+    function expandTermsForDistribution(terms) {
+      var result = [];
+      for (var i = 0; i < terms.length; i++) {
+        var t = terms[i];
+        var tbatch = _collectTheta(t);
+        var pbatch = _collectPhi(t);
+
+        var coeffSurd;
+        try { coeffSurd = Surd.parse(t.s); } catch(e) { coeffSurd = new Surd(1, 0, 1, 1); }
+
+        result.push({
+          thetaBatch: tbatch,
+          phiBatch: pbatch,
+          coeff: coeffSurd,
+          im: !!t.im
+        });
+      }
+      return result;
+    }
+
+    function crossMultiplyTerms(ts) {
+      var realTerms = [], imagTerms = [];
+      for (var i = 0; i < ts.length; i++) {
+        if (ts[i].im) imagTerms.push(ts[i]);
+        else realTerms.push(ts[i]);
+      }
+
+      var pairs = [];
+      // real × real
+      for (var i = 0; i < realTerms.length; i++) {
+        for (var j = 0; j < realTerms.length; j++) {
+          var p = multiplyTermPair(realTerms[i], realTerms[j]);
+          if (p) pairs.push(p);
+        }
+      }
+      // imag × imag
+      for (var i = 0; i < imagTerms.length; i++) {
+        for (var j = 0; j < imagTerms.length; j++) {
+          var p = multiplyTermPair(imagTerms[i], imagTerms[j]);
+          if (p) pairs.push(p);
+        }
+      }
+      return pairs;
+    }
+
+    function multiplyTermPair(a, b) {
+      if (a.im !== b.im) return null;
+      var coeff = Surd.mul(a.coeff, b.coeff);
+      var thetaBatch = mergeThetaBatches(a.thetaBatch, b.thetaBatch);
+      return {
+        thetaBatch: thetaBatch,
+        phiBatches: [a.phiBatch, b.phiBatch],
+        coeff: coeff,
+      };
+    }
+
+    function mergeThetaBatches(a, b) {
+      var result = [];
+      var map = {};
+      for (var i = 0; i < a.length; i++) {
+        var key = a[i].idx;
+        map[key] = { idx: a[i].idx, sp: a[i].sp || 0, cp: a[i].cp || 0 };
+      }
+      for (var i = 0; i < b.length; i++) {
+        var key = b[i].idx;
+        if (map[key]) {
+          map[key].sp += b[i].sp || 0;
+          map[key].cp += b[i].cp || 0;
+        } else {
+          map[key] = { idx: b[i].idx, sp: b[i].sp || 0, cp: b[i].cp || 0 };
+        }
+      }
+      for (var k in map) result.push(map[k]);
+      return result;
+    }
+
+    function mergePhiBatches(a, b) {
+      return (a || []).concat(b || []);
+    }
+
+    function expandPhiProduct(pf1, pm1, pf2, pm2) {
+      if (pf1 === '1') return [{ pf: pf2, pm: pm2 || 0, factor: '1' }];
+      if (pf2 === '1') return [{ pf: pf1, pm: pm1 || 0, factor: '1' }];
+
+      if (pf1 === 'cos' && pf2 === 'cos') {
+        return [
+          { pf: 'cos', pm: (pm1||0) + (pm2||0), factor: '1/2' },
+          { pf: 'cos', pm: Math.abs((pm1||0) - (pm2||0)), factor: '1/2' }
+        ];
+      }
+      if (pf1 === 'sin' && pf2 === 'sin') {
+        return [
+          { pf: 'cos', pm: Math.abs((pm1||0) - (pm2||0)), factor: '1/2' },
+          { pf: 'cos', pm: (pm1||0) + (pm2||0), factor: '-1/2' }
+        ];
+      }
+      if (pf1 === 'cos' && pf2 === 'sin') {
+        return [
+          { pf: 'sin', pm: (pm1||0) + (pm2||0), factor: '1/2' },
+          { pf: 'sin', pm: Math.abs((pm1||0) - (pm2||0)), factor: '-1/2' }
+        ];
+      }
+      if (pf1 === 'sin' && pf2 === 'cos') {
+        return [
+          { pf: 'sin', pm: (pm1||0) + (pm2||0), factor: '1/2' },
+          { pf: 'sin', pm: Math.abs((pm1||0) - (pm2||0)), factor: '1/2' }
+        ];
+      }
+      return [];
+    }
+
+    function addTermToFourier(fourierMap, pair, phiCombine) {
+      if (!pair) return;
+      var coeff = pair.coeff;
+      var thetaBatch = pair.thetaBatch;
+      var phiBatches = pair.phiBatches || [[], []];
+
+      // ── Expand θ: sin^p(θ_i/2)·cos^q(θ_i/2) → Fourier basis cos(kθ_i/2), sin(kθ_i/2) ──
+      // Uses expandHalfAngleBasis (same as Angular Formula Calculator).
+      var thetaExpansions = [{ terms: [], factorSurd: new Surd(1, 1, 1, 1) }];
+      for (var ti = 0; ti < thetaBatch.length; ti++) {
+        var tt = thetaBatch[ti];
+        var halfExp = expandHalfAngleBasis(tt.sp, tt.cp);
+        if (halfExp.length === 0) continue;
+        var newList = [];
+        for (var ei = 0; ei < thetaExpansions.length; ei++) {
+          for (var hi = 0; hi < halfExp.length; hi++) {
+            var he = halfExp[hi];
+            if (he.s === '0') continue;
+            var terms = thetaExpansions[ei].terms.slice();
+            if (he.func !== '1') {
+              terms.push({ idx: tt.idx, func: he.func, k: he.k });
+            }
+            var f = Surd.mul(thetaExpansions[ei].factorSurd, Surd.parse(he.s));
+            if (!f.isZero()) {
+              newList.push({ terms: terms, factorSurd: f });
+            }
+          }
+        }
+        thetaExpansions = newList;
+      }
+
+      // ── Expand φ: cos/sin product → sum of cos/sin using trig identities ──
+      var allPhi = (phiBatches[0] || []).concat(phiBatches[1] || []);
+
+      // J=0 optimization: fix φ_removeIdx = 0
+      //   sin(l·0) = 0 → term vanishes; cos(l·0) = 1 → factor drops
+      if (phiCombine) {
+        var filtered = [];
+        for (var i = 0; i < allPhi.length; i++) {
+          if (allPhi[i].idx === phiCombine.removeIdx) {
+            if (allPhi[i].pf === 'sin') return; // sin(0)=0 → whole term zero
+            continue; // cos(0)=1 → drop the factor
+          }
+          filtered.push(allPhi[i]);
+        }
+        allPhi = filtered;
+      }
+      var phiByIdx = {};
+      for (var i = 0; i < allPhi.length; i++) {
+        var idx = allPhi[i].idx;
+        if (!phiByIdx[idx]) phiByIdx[idx] = [];
+        phiByIdx[idx].push(allPhi[i]);
+      }
+
+      var phiExpansions = [{ terms: [], factorSurd: new Surd(1, 1, 1, 1) }];
+      var idxKeys = Object.keys(phiByIdx).sort();
+      for (var ki = 0; ki < idxKeys.length; ki++) {
+        var idx = idxKeys[ki];
+        var phis = phiByIdx[idx];
+
+        var product = [{ pf: '1', pm: 0, factorSurd: new Surd(1, 1, 1, 1) }];
+        for (var pi = 0; pi < phis.length; pi++) {
+          var newProduct = [];
+          for (var ppi = 0; ppi < product.length; ppi++) {
+            var expanded = expandPhiProduct(
+              product[ppi].pf, product[ppi].pm,
+              phis[pi].pf, phis[pi].pm || 0
+            );
+            for (var ei = 0; ei < expanded.length; ei++) {
+              var f = Surd.mul(product[ppi].factorSurd, parseFractionSurd(expanded[ei].factor));
+              if (!f.isZero()) {
+                newProduct.push({ pf: expanded[ei].pf, pm: expanded[ei].pm, factorSurd: f });
+              }
+            }
+          }
+          product = newProduct;
+        }
+
+        var newExpanded = [];
+        for (var ei = 0; ei < phiExpansions.length; ei++) {
+          for (var pj = 0; pj < product.length; pj++) {
+            var terms = phiExpansions[ei].terms.slice();
+            terms.push({ idx: parseInt(idx), pf: product[pj].pf, pm: product[pj].pm });
+            var f = Surd.mul(phiExpansions[ei].factorSurd, product[pj].factorSurd);
+            if (!f.isZero()) {
+              newExpanded.push({ terms: terms, factorSurd: f });
+            }
+          }
+        }
+        phiExpansions = newExpanded;
+      }
+
+      if (phiExpansions.length === 0) {
+        phiExpansions = [{ terms: [], factorSurd: new Surd(1, 1, 1, 1) }];
+      }
+
+      // ── Combine θ × φ Fourier modes ──
+      for (var tei = 0; tei < thetaExpansions.length; tei++) {
+        for (var pei = 0; pei < phiExpansions.length; pei++) {
+          var tExp = thetaExpansions[tei];
+          var pExp = phiExpansions[pei];
+
+          var totalCoeff = Surd.mul(coeff, Surd.mul(tExp.factorSurd, pExp.factorSurd));
+          if (totalCoeff.isZero()) continue;
+
+          var key = buildCombinedKey(tExp.terms, pExp.terms);
+          if (!key) continue;
+
+          if (!fourierMap[key]) fourierMap[key] = new SurdSum();
+          fourierMap[key].add(totalCoeff);
+        }
+      }
+    }
+
+    function buildCombinedKey(thetaTerms, phiTerms) {
+      var thetaParts = [], phiParts = [];
+      var allEmpty = true;
+
+      for (var i = 0; i < thetaTerms.length; i++) {
+        var t = thetaTerms[i];
+        if (t.k === 0) {
+          if (t.func === 'sin') return null;
+          continue;
+        }
+        allEmpty = false;
+        thetaParts.push(t.idx + ':' + t.func + '|' + t.k);
+      }
+
+      for (var i = 0; i < phiTerms.length; i++) {
+        var p = phiTerms[i];
+        if (p.pf === '1') continue;
+        if (p.pm === 0) {
+          if (p.pf === 'sin') return null;
+          continue;
+        }
+        allEmpty = false;
+        phiParts.push(p.idx + ':' + p.pf + '|' + p.pm);
+      }
+
+      if (allEmpty) return '1';
+
+      var key = '';
+      if (thetaParts.length > 0) key += 't:' + thetaParts.join(',');
+      if (thetaParts.length > 0 && phiParts.length > 0) key += '||';
+      if (phiParts.length > 0) key += 'p:' + phiParts.join(',');
+      return key;
+    }
+
+    function parseFractionSurd(s) {
+      try { return Surd.parse(s); } catch(e) { return new Surd(1, 1, 1, 1); }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // DISPLAY HELPERS
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    function renderFourierToString(fourierMap, phiCombine) {
+      var keys = Object.keys(fourierMap).sort(function(a, b) {
+        return sortFourierKey(a) - sortFourierKey(b);
+      });
+
+      if (keys.length === 0) return '';
+
+      var lines = '';
+      var first = true;
+      for (var ki = 0; ki < keys.length; ki++) {
+        var key = keys[ki];
+        var sum = fourierMap[key];
+        if (sum.isEmpty()) continue;
+
+        var sumStr = sum.toLatex();
+        if (sumStr === '0') continue;
+
+        var fourierStr = fourierKeyToLatex(key, phiCombine);
+
+        if (!first) lines += ' \\!+\\! ';
+        lines += sumStr;
+        if (fourierStr) lines += '\\,' + fourierStr;
+        first = false;
+      }
+
+      return lines;
+    }
+
+    function sortFourierKey(key) {
+      if (key === '1') return 0;
+      var maxOrder = 0;
+      // θ part (before ||), φ part (after ||)
+      var tPart = key.indexOf('||') >= 0 ? key.substring(0, key.indexOf('||')) : key;
+      var pPart = key.indexOf('||') >= 0 ? key.substring(key.indexOf('||') + 2) : '';
+      // Also handle standalone p: keys
+      if (pPart === '' && key.indexOf('p:') === 0) pPart = key;
+      var re = /:\w+\|(\d+)/g;
+      var m;
+      while ((m = re.exec(tPart)) !== null) maxOrder = Math.max(maxOrder, parseInt(m[1]));
+      while ((m = re.exec(pPart)) !== null) maxOrder = Math.max(maxOrder, parseInt(m[1]));
+      return maxOrder || 0;
+    }
+
+    function fourierKeyToLatex(key, phiCombine) {
+      if (key === '1' || key === '') return '';
+
+      var tPart = '', pPart = '';
+      var sep = key.indexOf('||');
+      if (sep >= 0) {
+        tPart = key.substring(0, sep);
+        pPart = key.substring(sep + 2);
+      } else if (key.indexOf('t:') === 0) {
+        tPart = key;
+      } else if (key.indexOf('p:') === 0) {
+        pPart = key;
+      }
+
+      var terms = [];
+
+      // Parse θ part (t:0:cos|1,1:sin|3)
+      if (tPart) {
+        var entries = tPart.indexOf(':') >= 0 ? tPart.substring(tPart.indexOf(':') + 1).split(',') : [];
+        for (var i = 0; i < entries.length; i++) {
+          var m = entries[i].match(/(\d+):(\w+)\|(\d+)/);
+          if (m) {
+            var idx = parseInt(m[1]);
+            var func = m[2];
+            var k = parseInt(m[3]);
+            var thetaName = '\\theta_{' + idx + '}';
+            var arg;
+            if (k === 1) {
+              arg = '\\frac{' + thetaName + '}{2}';
+            } else if (k % 2 === 0) {
+              var n = k / 2;
+              arg = (n === 1 ? '' : n) + thetaName;
+            } else {
+              arg = '\\frac{' + k + '}{2}' + thetaName;
+            }
+            terms.push('\\' + func + '(' + arg + ')');
+          }
+        }
+      }
+
+      // Parse φ part (p:0:cos|2,1:sin|1)
+      if (pPart) {
+        var entries2 = pPart.indexOf(':') >= 0 ? pPart.substring(pPart.indexOf(':') + 1).split(',') : [];
+        for (var i = 0; i < entries2.length; i++) {
+          var m = entries2[i].match(/(\d+):(\w+)\|(\d+)/);
+          if (m) {
+            var idx = parseInt(m[1]);
+            var pf = m[2];
+            var pm = parseInt(m[3]);
+            var phiName = '\\phi_{' + idx + '}';
+            // J=0 optimization: rename φ_renameIdx → (φ_removeIdx + φ_renameIdx)
+            if (phiCombine && idx === phiCombine.renameIdx) {
+              phiName = '\\phi_{' + phiCombine.removeIdx + '}+\\phi_{' + phiCombine.renameIdx + '}';
+              if (pm !== 1) phiName = '(' + phiName + ')';
+            }
+            var arg = (pm === 1 ? '' : pm) + phiName;
+            terms.push('\\' + pf + '(' + arg + ')');
+          }
+        }
+      }
+
+      return terms.join('\\,');
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
     // ===================================================================
     // LATEX DOCUMENT GENERATION & DOWNLOAD
     // ===================================================================
-    function helicityLatex(hStr) {
-      // hStr is "la,lb,lc" like "0,1,-1"
-      var parts = hStr.split(',');
-      return parts[0] + ',' + parts[1] + ',' + parts[2];
-    }
-
-    function lsLatex(lsStr) {
-      // lsStr is "l,s" like "1,0.5"
-      return lsStr.replace(',', ',');
-    }
-
-    function generateLatexDocument() {
-      if (!_lastResults) return '';
-      var results = _lastResults;
+    function generateDistributionLatexDocument() {
+      if (!_lastBatchResults) return '';
+      var results = _lastBatchResults;
       var batch = _lastBatch;
 
       var lines = [];
@@ -837,7 +1260,7 @@ Selection rules:
       lines.push('\\usepackage{amsfonts}');
       lines.push('\\usepackage[a4paper,margin=2.5cm]{geometry}');
       lines.push('');
-      lines.push('\\title{Angular Formulas for Particle Decay}');
+      lines.push('\\title{Angular Distribution I(\\theta,\\phi) for Particle Decay}');
       lines.push('\\date{}');
       lines.push('\\begin{document}');
       lines.push('\\maketitle');
@@ -851,34 +1274,16 @@ Selection rules:
           lines.push('\\subsection*{$' + r.latexLabel + '$}');
         }
 
-        var hs = Object.keys(r.result.helicities).sort();
-        var alignLines = [];
+        var lsKeys = Object.keys(r.result.lsMap).sort();
+        for (var li = 0; li < lsKeys.length; li++) {
+          var lk = lsKeys[li];
+          var fourier = r.result.lsMap[lk].fourier;
+          var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+          if (!latexExpr || latexExpr === '') latexExpr = '= 0';
 
-        for (var hi = 0; hi < hs.length; hi++) {
-          var h = hs[hi];
-          var lsDict = r.result.helicities[h];
-          var lss = Object.keys(lsDict).sort();
-
-          for (var lj = 0; lj < lss.length; lj++) {
-            var ls = lss[lj];
-            var c = lsDict[ls];
-            var latexExpr = complexToLatex(c);
-
-            var hLabel = h.replace(/,/g, '\\,'); // "1/2,-1/2" -> "1/2,-1/2"
-            var lsLabel = ls.replace(',', ',');    // "1,0.5" -> "1,0.5"
-
-            alignLines.push('T_{' + hLabel + '}^{(' + lsLabel + ')} &= ' + latexExpr + ' \\\\');
-          }
-        }
-
-        if (alignLines.length > 0) {
-          // Remove trailing \\ from last line
-          var lastIdx = alignLines.length - 1;
-          alignLines[lastIdx] = alignLines[lastIdx].replace(' \\\\', '');
+          var lsLabel = lk.replace(/,/g, ',\\;');
           lines.push('\\begin{align*}');
-          for (var ai = 0; ai < alignLines.length; ai++) {
-            lines.push('  ' + alignLines[ai]);
-          }
+          lines.push('  I_{(' + lsLabel + ')}(\\theta,\\phi) ' + latexExpr);
           lines.push('\\end{align*}');
           lines.push('');
         }
@@ -888,23 +1293,19 @@ Selection rules:
       return lines.join('\n');
     }
 
-    function downloadLatex() {
-      var content = generateLatexDocument();
+    function downloadDistributionLatex() {
+      var content = generateDistributionLatexDocument();
       if (!content) return;
 
       var blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      a.download = 'angular-formulas.tex';
+      a.download = 'angular-distribution.tex';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    }
-
-    function escapeHtml(s) {
-      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     // Render tree on load
