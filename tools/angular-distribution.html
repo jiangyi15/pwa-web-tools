@@ -726,7 +726,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
                 var lsKeys2 = Object.keys(rj.result.lsMap).sort();
                 if (lsKeys1.length === 0 || lsKeys2.length === 0) continue;
 
-                var crossPC = ri.result.phiCombine || rj.result.phiCombine || null;
+                var crossPC = (ri.result.phiCombine && rj.result.phiCombine) ? ri.result.phiCombine : null;
                 var cross = computeCrossChainInterference(
                   ri.result.combinedRaw, lsKeys1,
                   rj.result.combinedRaw, lsKeys2,
@@ -1354,7 +1354,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
       }
 
       var phiExpansions = [{ terms: [], factorSurd: new Surd(1, 1, 1, 1) }];
-      var idxKeys = Object.keys(phiByIdx).sort();
+      var idxKeys = Object.keys(phiByIdx).sort(function(a, b) { return parseInt(a) - parseInt(b); });
       for (var ki = 0; ki < idxKeys.length; ki++) {
         var idx = idxKeys[ki];
         var phis = phiByIdx[idx];

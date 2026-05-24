@@ -664,24 +664,24 @@ function getAngleFormulaSimplified(decayTree) {
   // Detect J=0 root decay: both child phi terms share the same exponent,
   // so we can fix φ₁=0 and rename φ₂→χ (one fewer azimuthal variable).
   // Vertex ordering (DFS): idx 0=root, 1..c0size=child0's cascade, c0size+1..=child1's cascade.
-  // removeIdx=1 (first child's decay vertex), renameIdx=1+c0size (second child's first vertex).
+  // fixIdx=1 (first child's decay vertex), chiIdx=1+c0size (second child's first vertex).
   var phiCombine = null;
   if (nDecays >= 3 &&
       toSpin(vertices[0].Ja).value === 0 &&
       decayTree.children && decayTree.children[0] && decayTree.children[1] &&
       decayTree.children[0].children && decayTree.children[1].children) {
     var c0size = countDecayVertices(decayTree.children[0]);
-    phiCombine = { removeIdx: 1, renameIdx: 1 + c0size };
+    phiCombine = { fixIdx: 1, chiIdx: 1 + c0size };
   }
   
   // LaTeX names for phi and theta (built directly from structure)
   var phiLatexNames = [], thetaLatexNames = [];
   for (var i = 0; i < nDecays; i++) {
-    if (phiCombine && i === phiCombine.removeIdx) {
+    if (phiCombine && i === phiCombine.fixIdx) {
       phiLatexNames[i] = '0';           // fixed to zero (not used after filtering)
-    } else if (phiCombine && i === phiCombine.renameIdx) {
+    } else if (phiCombine && i === phiCombine.chiIdx) {
       // Wrapping parens so pm multiplier works on the whole sum, e.g. cos(2(φ₁+φ₂))
-      phiLatexNames[i] = '(\\phi_{' + phiCombine.removeIdx + '}+\\phi_{' + phiCombine.renameIdx + '})';
+      phiLatexNames[i] = '(\\phi_{' + phiCombine.fixIdx + '}+\\phi_{' + phiCombine.chiIdx + '})';
     } else {
       phiLatexNames[i] = '\\phi_{' + i + '}';
     }
@@ -705,7 +705,7 @@ function getAngleFormulaSimplified(decayTree) {
       // Group by basis
       var grouped = _groupExpandedTerms(allExpanded);
       
-      // Apply J=0 phi substitution: φ_removeIdx = 0
+      // Apply J=0 phi substitution: φ_fixIdx = 0
       //   sin(l·0) = 0 → term vanishes
       //   cos(l·0) = 1 → phi factor drops
       if (phiCombine) {
@@ -715,7 +715,7 @@ function getAngleFormulaSimplified(decayTree) {
           var newPhi = [], skip = false;
           for (var pi = 0; pi < grp.phiBasis.length; pi++) {
             var pb = grp.phiBasis[pi];
-            if (pb.idx === phiCombine.removeIdx) {
+            if (pb.idx === phiCombine.fixIdx) {
               if (pb.pf === 'sin') { skip = true; break; }
             } else {
               newPhi.push(pb);
@@ -827,10 +827,10 @@ function getAngleFormulaSimplified(decayTree) {
   // Build angle list (LaTeX names)
   var angles = [];
   for (var i = 0; i < nDecays; i++) {
-    if (phiCombine && i === phiCombine.removeIdx) {
+    if (phiCombine && i === phiCombine.fixIdx) {
       angles.push('\\theta_' + i);             // only theta (phi fixed to 0)
-    } else if (phiCombine && i === phiCombine.renameIdx) {
-      angles.push('(\\phi_{' + phiCombine.removeIdx + '}+\\phi_{' + phiCombine.renameIdx + '}), \\theta_' + i);
+    } else if (phiCombine && i === phiCombine.chiIdx) {
+      angles.push('(\\phi_{' + phiCombine.fixIdx + '}+\\phi_{' + phiCombine.chiIdx + '}), \\theta_' + i);
     } else {
       angles.push('\\phi_' + i + ', \\theta_' + i);
     }
