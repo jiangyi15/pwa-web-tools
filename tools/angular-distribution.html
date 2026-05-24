@@ -228,6 +228,17 @@
                 </button>
                 <button type="button" class="btn btn-secondary" id="reset-btn">Reset</button>
               </div>
+
+              <div class="option-group" style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border);">
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8125rem;cursor:pointer;">
+                  <input type="checkbox" id="show-interference" checked>
+                  <span>Show interference terms 2 Re[T<sub>ls1</sub> T<sub>ls2</sub>*]</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8125rem;cursor:pointer;margin-top:0.4rem;">
+                  <input type="checkbox" id="show-basis">
+                  <span>Show basis functions</span>
+                </label>
+              </div>
             </div>
           </div>
 
@@ -683,7 +694,8 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
 
           for (var bi = 0; bi < batchTrees.length; bi++) {
             try {
-              var result = computeAngularDistribution(batchTrees[bi].tree);
+              var showInterference = document.getElementById('show-interference').checked;
+              var result = computeAngularDistribution(batchTrees[bi].tree, { showInterference: showInterference });
               if (result && !result.error) {
                 results.push({ label: batchTrees[bi].label, latexLabel: batchTrees[bi].latexLabel, result: result, error: null });
                 nOk++;
@@ -702,6 +714,42 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
             return;
           }
 
+          // ── Cross-chain interference (batch mode only) ──
+          if (batch && nOk >= 2 && showInterference) {
+            for (var ii = 0; ii < results.length; ii++) {
+              for (var jj = ii + 1; jj < results.length; jj++) {
+                var ri = results[ii], rj = results[jj];
+                if (!ri.result || !rj.result) continue;
+                if (!ri.result.combinedRaw || !rj.result.combinedRaw) continue;
+
+                var lsKeys1 = Object.keys(ri.result.lsMap).sort();
+                var lsKeys2 = Object.keys(rj.result.lsMap).sort();
+                if (lsKeys1.length === 0 || lsKeys2.length === 0) continue;
+
+                var crossPC = ri.result.phiCombine || rj.result.phiCombine || null;
+                var cross = computeCrossChainInterference(
+                  ri.result.combinedRaw, lsKeys1,
+                  rj.result.combinedRaw, lsKeys2,
+                  crossPC
+                );
+
+                results.push({
+                  label: ri.label + ' \u00d7 ' + rj.label,
+                  latexLabel: ri.latexLabel + '\\,' + rj.latexLabel,
+                  result: {
+                    lsMap: {},
+                    nDecays: 0,
+                    phiCombine: crossPC,
+                    interfMap: cross.interfMap,
+                    interfImagMap: cross.interfImagMap,
+                    isCrossChain: true
+                  },
+                  error: null
+                });
+              }
+            }
+          }
+
           showBatchDistributionResults(results, batch);
         } catch (e) {
           showError('Computation error: ' + (e.message || e));
@@ -717,20 +765,26 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
       var statusIndicator = document.getElementById('status-indicator');
       var statusText = document.getElementById('status-text');
       var resultsBody = document.getElementById('results-body');
+      var showBasis = document.getElementById('show-basis').checked;
 
       _lastBatchResults = results;
       _lastBatch = batch;
       document.getElementById('download-latex-btn').style.display = '';
 
       var totalLS = 0;
+      var totalIF = 0;
       for (var i = 0; i < results.length; i++) {
         if (results[i].result) {
           totalLS += Object.keys(results[i].result.lsMap).length;
+          if (results[i].result.interfMap) {
+            totalIF += Object.keys(results[i].result.interfMap).length;
+          }
         }
       }
 
       statusIndicator.className = 'status-indicator success';
       var statusMsg = totalLS + ' LS component(s)';
+      if (totalIF > 0) statusMsg += ' + ' + totalIF + ' interference term(s) (×2)';
       if (batch) statusMsg += ' across ' + results.length + ' spin combination(s)';
       statusText.textContent = statusMsg;
 
@@ -750,19 +804,103 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
         if (r.error) {
           html += '<p style="color: var(--error); font-size: 0.85rem;">✗ ' + escapeHtml(r.error) + '</p>';
         } else if (r.result) {
+          var isCross = r.result.isCrossChain;
           var lsKeys = Object.keys(r.result.lsMap).sort();
-          html += '<table class="result-table"><thead><tr><th>LS (l,s)</th><th>I<sub>(l,s)</sub>(θ,φ)</th></tr></thead><tbody>';
-          for (var li = 0; li < lsKeys.length; li++) {
-            var lk = lsKeys[li];
-            var fourier = r.result.lsMap[lk].fourier;
-            var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
-            if (!latexExpr) latexExpr = '0';
-            html += '<tr><td>(' + lk + ')</td><td><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div></td></tr>';
+
+          // Normal result: show LS table + interference
+          // Cross-chain: show interference-only table
+          if (lsKeys.length > 0) {
+            html += '<table class="result-table"><thead><tr><th>LS (l,s)</th><th>I<sub>(l,s)</sub>(θ,φ)</th></tr></thead><tbody>';
+            for (var li = 0; li < lsKeys.length; li++) {
+              var lk = lsKeys[li];
+              var fourier = r.result.lsMap[lk].fourier;
+              var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+              if (!latexExpr) latexExpr = '0';
+              html += '<tr><td>(' + lk + ')</td><td><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div></td></tr>';
+            }
           }
-          html += '</tbody></table>';
+
+          // Interference section helper: emits rows for the given map
+          function emitInterferenceSection(fourierMap, sectionLabel) {
+            if (!fourierMap) return;
+            var ifKeys = Object.keys(fourierMap).sort();
+            if (ifKeys.length === 0) return;
+
+            // Start a new table for cross-chain interference-only sections
+            if (isCross && lsKeys.length === 0) {
+              html += '<table class="result-table"><thead><tr><th>Cross LS</th><th>Expression</th></tr></thead><tbody>';
+            }
+
+            html += '<tr style="background:var(--bg-tertiary);"><td colspan="2" style="font-size:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-muted);text-align:center;">' + sectionLabel + '</td></tr>';
+            for (var ii = 0; ii < ifKeys.length; ii++) {
+              var ik = ifKeys[ii];
+              var fourier = fourierMap[ik].fourier;
+              var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+              if (!latexExpr) latexExpr = '0';
+              var pairLabel = ik.replace(/\u00d7/g, ') \u00d7 (');
+              html += '<tr><td style="font-size:0.75rem;color:var(--text-muted);">(' + pairLabel + ')</td><td><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div></td></tr>';
+            }
+          }
+
+          emitInterferenceSection(r.result.interfMap, '2 Re[T<sub>ls1</sub> T<sub>ls2</sub>*]');
+          emitInterferenceSection(r.result.interfImagMap, '2 Im[T<sub>ls1</sub> T<sub>ls2</sub>*]');
+
+          // Close table(s)
+          if (lsKeys.length > 0) {
+            html += '</tbody></table>';
+          } else if (r.result.interfMap || r.result.interfImagMap) {
+            html += '</tbody></table>';
+          }
+
         }
 
         if (batch) html += '</div>';
+      }
+
+      // ── Global product-basis table (all unique Fourier keys) ──
+      if (showBasis) {
+        // Determine a phiCombine for display: use first non-null from results
+        var basisPC = null;
+        for (var ri = 0; ri < results.length && !basisPC; ri++) {
+          if (results[ri].result && results[ri].result.phiCombine) basisPC = results[ri].result.phiCombine;
+        }
+
+        var productBasis = {};
+        for (var ri = 0; ri < results.length; ri++) {
+          var r = results[ri];
+          if (!r.result) continue;
+          var maps = [r.result.lsMap, r.result.interfMap, r.result.interfImagMap];
+          for (var mi = 0; mi < maps.length; mi++) {
+            var m = maps[mi];
+            if (!m) continue;
+            var mKeys = Object.keys(m);
+            for (var ki = 0; ki < mKeys.length; ki++) {
+              var fMap = m[mKeys[ki]].fourier;
+              var fKeys = Object.keys(fMap);
+              for (var fi = 0; fi < fKeys.length; fi++) {
+                var fk = fKeys[fi];
+                if (fk === '1') continue;
+                if (fMap[fk].isEmpty()) continue;
+                productBasis[fk] = true;
+              }
+            }
+          }
+        }
+
+        var basisKeys = Object.keys(productBasis).sort(function(a, b) {
+          if (a.length !== b.length) return a.length - b.length;
+          return a.localeCompare(b);
+        });
+
+        if (basisKeys.length > 0) {
+          html += '<div style="margin-top:1.5rem;">';
+          html += '<table class="result-table"><thead><tr><th>#</th><th>Product basis function</th></tr></thead><tbody>';
+          for (var bi = 0; bi < basisKeys.length; bi++) {
+            var tex = fourierKeyToLatex(basisKeys[bi], basisPC);
+            html += '<tr><td style="text-align:center;color:var(--text-muted);font-size:0.75rem;">' + (bi + 1) + '</td><td><span class="latex-cell" data-latex="' + escapeHtml(tex) + '"></span></td></tr>';
+          }
+          html += '</tbody></table></div>';
+        }
       }
 
       resultsBody.innerHTML = html;
@@ -795,7 +933,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
     // ANGULAR DISTRIBUTION |T|² COMPUTATION
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    function computeAngularDistribution(tree) {
+    function computeAngularDistribution(tree, options) {
       if (!tree.children) return { error: 'Root must decay.' };
 
       var vertices = getVertices(tree);
@@ -809,7 +947,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
           tree.children && tree.children[0] && tree.children[1] &&
           tree.children[0].children && tree.children[1].children) {
         var c0size = countDecayVertices(tree.children[0]);
-        phiCombine = { removeIdx: 1, renameIdx: 1 + c0size };
+        phiCombine = { fixIdx: 1, chiIdx: 1 + c0size };
       }
 
       // Build structured vertex terms
@@ -865,7 +1003,114 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
         }
       }
 
-      return { lsMap: lsMap, nDecays: nDecays, phiCombine: phiCombine };
+      // ── Interference terms 2 Re[T_{ls1} T_{ls2}*] and 2 Im[T_{ls1} T_{ls2}*] ──
+      var showInterference = options && options.showInterference;
+      var interfMap = {};
+      var interfImagMap = {};
+
+      if (showInterference && lsKeyList.length >= 2) {
+        // Initialize interference maps for each LS pair
+        for (var li1 = 0; li1 < lsKeyList.length; li1++) {
+          for (var li2 = li1 + 1; li2 < lsKeyList.length; li2++) {
+            var key = lsKeyList[li1] + '\u00d7' + lsKeyList[li2];
+            interfMap[key] = { fourier: {} };
+            interfImagMap[key] = { fourier: {} };
+          }
+        }
+
+        // Cross helicity contributions between LS pairs
+        for (var hi = 0; hi < allHK.length; hi++) {
+          var hk = allHK[hi];
+          var lsDict = combined[hk];
+
+          for (var li1 = 0; li1 < lsKeyList.length; li1++) {
+            var lk1 = lsKeyList[li1];
+            var terms1 = lsDict[lk1];
+            if (!terms1 || terms1.length === 0) continue;
+
+            for (var li2 = li1 + 1; li2 < lsKeyList.length; li2++) {
+              var lk2 = lsKeyList[li2];
+              var terms2 = lsDict[lk2];
+              if (!terms2 || terms2.length === 0) continue;
+
+              var tSums1 = expandTermsForDistribution(terms1);
+              var tSums2 = expandTermsForDistribution(terms2);
+
+              // 2 Re[T1 T2*] = 2·(Re1·Re2 + Im1·Im2)
+              var pairTerms = crossMultiplyTermsBetween(tSums1, tSums2);
+              var pairKey = lk1 + '\u00d7' + lk2;
+              for (var pi = 0; pi < pairTerms.length; pi++) {
+                addTermToFourier(interfMap[pairKey].fourier, pairTerms[pi], phiCombine);
+              }
+
+              // 2 Im[T1 T2*] = 2·(Im1·Re2 − Re1·Im2)
+              var imagPairs = crossMultiplyTermsBetweenImag(tSums1, tSums2);
+              for (var pi = 0; pi < imagPairs.length; pi++) {
+                addTermToFourier(interfImagMap[pairKey].fourier, imagPairs[pi], phiCombine);
+              }
+            }
+          }
+        }
+      }
+
+      return { lsMap: lsMap, nDecays: nDecays, phiCombine: phiCombine, interfMap: interfMap, interfImagMap: interfImagMap, combinedRaw: combined, lsKeyList: lsKeyList };
+    }
+
+    // ── Cross-chain interference (batch mode: different spin combos) ──
+    // Takes raw combined data and LS lists from two trees and computes
+    // 2 Re[T_{chain1,ls1} T_{chain2,ls2}*] and 2 Im[T_{chain1,ls1} T_{chain2,ls2}*]
+    // across all helicity × helicity pairs.
+    function computeCrossChainInterference(combined1, lsKeys1, combined2, lsKeys2, phiCombine) {
+      var hk1List = Object.keys(combined1);
+      var hk2List = Object.keys(combined2);
+
+      var interfMap = {};
+      var interfImagMap = {};
+      for (var i1 = 0; i1 < lsKeys1.length; i1++) {
+        for (var i2 = 0; i2 < lsKeys2.length; i2++) {
+          var key = lsKeys1[i1] + '\u00d7' + lsKeys2[i2];
+          interfMap[key] = { fourier: {} };
+          interfImagMap[key] = { fourier: {} };
+        }
+      }
+
+      for (var h1 = 0; h1 < hk1List.length; h1++) {
+        var lsDict1 = combined1[hk1List[h1]];
+        for (var h2 = 0; h2 < hk2List.length; h2++) {
+          var lsDict2 = combined2[hk2List[h2]];
+
+          for (var i1 = 0; i1 < lsKeys1.length; i1++) {
+            var lk1 = lsKeys1[i1];
+            var terms1 = lsDict1[lk1];
+            if (!terms1 || terms1.length === 0) continue;
+
+            for (var i2 = 0; i2 < lsKeys2.length; i2++) {
+              var lk2 = lsKeys2[i2];
+              var terms2 = lsDict2[lk2];
+              if (!terms2 || terms2.length === 0) continue;
+
+              var tSums1 = expandTermsForDistribution(terms1);
+              var tSums2 = expandTermsForDistribution(terms2);
+
+              var pairKey = lk1 + '\u00d7' + lk2;
+
+              // 2 Re[T1 T2*]
+              var pairTerms = crossMultiplyTermsBetween(tSums1, tSums2);
+              for (var pi = 0; pi < pairTerms.length; pi++) {
+                addTermToFourier(interfMap[pairKey].fourier, pairTerms[pi], phiCombine);
+              }
+
+              // 2 Im[T1 T2*]
+              var imagPairs = crossMultiplyTermsBetweenImag(tSums1, tSums2);
+              for (var pi = 0; pi < imagPairs.length; pi++) {
+                addTermToFourier(interfImagMap[pairKey].fourier, imagPairs[pi], phiCombine);
+              }
+            }
+          }
+        }
+      }
+
+      return { interfMap: interfMap, interfImagMap: interfImagMap };
     }
 
     function expandTermsForDistribution(terms) {
@@ -911,6 +1156,77 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
         }
       }
       return pairs;
+    }
+
+    function crossMultiplyTermsBetween(ts1, ts2) {
+      var real1 = [], imag1 = [];
+      var real2 = [], imag2 = [];
+      for (var i = 0; i < ts1.length; i++) {
+        if (ts1[i].im) imag1.push(ts1[i]);
+        else real1.push(ts1[i]);
+      }
+      for (var i = 0; i < ts2.length; i++) {
+        if (ts2[i].im) imag2.push(ts2[i]);
+        else real2.push(ts2[i]);
+      }
+
+      var pairs = [];
+      // real1 × real2
+      for (var i = 0; i < real1.length; i++) {
+        for (var j = 0; j < real2.length; j++) {
+          var p = multiplyTermPair(real1[i], real2[j]);
+          if (p) pairs.push(p);
+        }
+      }
+      // imag1 × imag2
+      for (var i = 0; i < imag1.length; i++) {
+        for (var j = 0; j < imag2.length; j++) {
+          var p = multiplyTermPair(imag1[i], imag2[j]);
+          if (p) pairs.push(p);
+        }
+      }
+      // Multiply coefficient by 2 (the 2 Re[...] factor)
+      var two = new Surd(2, 1, 1, 1);
+      for (var i = 0; i < pairs.length; i++) {
+        pairs[i].coeff = Surd.mul(pairs[i].coeff, two);
+      }
+      return pairs;
+    }
+
+    // Cross multiply for 2·Im[T1 T2*] = 2·(Im1·Re2 − Re1·Im2)
+    // Uses the im-blind pair multiplier so we can mix real & imag terms
+    function crossMultiplyTermsBetweenImag(ts1, ts2) {
+      var pairs = [];
+      for (var i = 0; i < ts1.length; i++) {
+        for (var j = 0; j < ts2.length; j++) {
+          var sign = 0;
+          if (ts1[i].im && !ts2[j].im) sign = 1;   // Im1·Re2 → +1
+          if (!ts1[i].im && ts2[j].im) sign = -1;   // Re1·Im2 → −1
+          if (sign === 0) continue;
+          var p = multiplyTermPairCross(ts1[i], ts2[j]);
+          if (p) {
+            if (sign === -1) p.coeff = Surd.mul(p.coeff, new Surd(-1, 1, 1, 1));
+            pairs.push(p);
+          }
+        }
+      }
+      // Multiply coefficient by 2 (the 2·Im[...] factor)
+      var two = new Surd(2, 1, 1, 1);
+      for (var i = 0; i < pairs.length; i++) {
+        pairs[i].coeff = Surd.mul(pairs[i].coeff, two);
+      }
+      return pairs;
+    }
+
+    // Term pair multiplier without the im-flag gate (needed for cross real/imag multiplication)
+    function multiplyTermPairCross(a, b) {
+      var coeff = Surd.mul(a.coeff, b.coeff);
+      var thetaBatch = mergeThetaBatches(a.thetaBatch, b.thetaBatch);
+      return {
+        thetaBatch: thetaBatch,
+        phiBatches: [a.phiBatch, b.phiBatch],
+        coeff: coeff,
+      };
     }
 
     function multiplyTermPair(a, b) {
@@ -1013,14 +1329,18 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
       // ── Expand φ: cos/sin product → sum of cos/sin using trig identities ──
       var allPhi = (phiBatches[0] || []).concat(phiBatches[1] || []);
 
-      // J=0 optimization: fix φ_removeIdx = 0
+      // J=0 optimization: fix φ_fixIdx = 0, φ_chiIdx → χ (independent variable)
       //   sin(l·0) = 0 → term vanishes; cos(l·0) = 1 → factor drops
+      //   χ is displayed later as φ_fixIdx + φ_chiIdx
       if (phiCombine) {
         var filtered = [];
         for (var i = 0; i < allPhi.length; i++) {
-          if (allPhi[i].idx === phiCombine.removeIdx) {
+          if (allPhi[i].idx === phiCombine.fixIdx) {
             if (allPhi[i].pf === 'sin') return; // sin(0)=0 → whole term zero
             continue; // cos(0)=1 → drop the factor
+          }
+          if (allPhi[i].idx === phiCombine.chiIdx) {
+            allPhi[i].idx = -allPhi[i].idx; // negate → marks this as χ variable
           }
           filtered.push(allPhi[i]);
         }
@@ -1154,7 +1474,14 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
 
         var fourierStr = fourierKeyToLatex(key, phiCombine);
 
-        if (!first) lines += ' \\!+\\! ';
+        if (!first) {
+          if (sumStr.charAt(0) === '-') {
+            lines += ' \\!-\\! ';
+            sumStr = sumStr.substring(1);
+          } else {
+            lines += ' \\!+\\! ';
+          }
+        }
         lines += sumStr;
         if (fourierStr) lines += '\\,' + fourierStr;
         first = false;
@@ -1198,7 +1525,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
       if (tPart) {
         var entries = tPart.indexOf(':') >= 0 ? tPart.substring(tPart.indexOf(':') + 1).split(',') : [];
         for (var i = 0; i < entries.length; i++) {
-          var m = entries[i].match(/(\d+):(\w+)\|(\d+)/);
+          var m = entries[i].match(/(-?\d+):(\w+)\|(\d+)/);
           if (m) {
             var idx = parseInt(m[1]);
             var func = m[2];
@@ -1222,16 +1549,18 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
       if (pPart) {
         var entries2 = pPart.indexOf(':') >= 0 ? pPart.substring(pPart.indexOf(':') + 1).split(',') : [];
         for (var i = 0; i < entries2.length; i++) {
-          var m = entries2[i].match(/(\d+):(\w+)\|(\d+)/);
+          var m = entries2[i].match(/(-?\d+):(\w+)\|(\d+)/);
           if (m) {
             var idx = parseInt(m[1]);
             var pf = m[2];
             var pm = parseInt(m[3]);
-            var phiName = '\\phi_{' + idx + '}';
-            // J=0 optimization: rename φ_renameIdx → (φ_removeIdx + φ_renameIdx)
-            if (phiCombine && idx === phiCombine.renameIdx) {
-              phiName = '\\phi_{' + phiCombine.removeIdx + '}+\\phi_{' + phiCombine.renameIdx + '}';
+            var phiName;
+            // J=0 optimization: negative idx → χ variable → display as φ_fixIdx + φ_chiIdx
+            if (phiCombine && idx < 0) {
+              phiName = '\\phi_{' + phiCombine.fixIdx + '}+\\phi_{' + Math.abs(idx) + '}';
               if (pm !== 1) phiName = '(' + phiName + ')';
+            } else {
+              phiName = '\\phi_{' + idx + '}';
             }
             var arg = (pm === 1 ? '' : pm) + phiName;
             terms.push('\\' + pf + '(' + arg + ')');
@@ -1286,6 +1615,38 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
           lines.push('  I_{(' + lsLabel + ')}(\\theta,\\phi) ' + latexExpr);
           lines.push('\\end{align*}');
           lines.push('');
+        }
+
+        // Interference terms: 2 Re[T1 T2*]
+        if (r.result.interfMap) {
+          var ifKeys = Object.keys(r.result.interfMap).sort();
+          for (var ii = 0; ii < ifKeys.length; ii++) {
+            var ik = ifKeys[ii];
+            var fourier = r.result.interfMap[ik].fourier;
+            var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+            if (!latexExpr || latexExpr === '') latexExpr = '= 0';
+            var pairLabel = ik.replace('\u00d7', '\\;\\times\\;');
+            lines.push('\\begin{align*}');
+            lines.push('  2\\,\\mathrm{Re}[T_{' + pairLabel + '}^*](\\theta,\\phi) ' + latexExpr);
+            lines.push('\\end{align*}');
+            lines.push('');
+          }
+        }
+
+        // Interference terms: 2 Im[T1 T2*]
+        if (r.result.interfImagMap) {
+          var ifKeys = Object.keys(r.result.interfImagMap).sort();
+          for (var ii = 0; ii < ifKeys.length; ii++) {
+            var ik = ifKeys[ii];
+            var fourier = r.result.interfImagMap[ik].fourier;
+            var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+            if (!latexExpr || latexExpr === '') latexExpr = '= 0';
+            var pairLabel = ik.replace('\u00d7', '\\;\\times\\;');
+            lines.push('\\begin{align*}');
+            lines.push('  2\\,\\mathrm{Im}[T_{' + pairLabel + '}^*](\\theta,\\phi) ' + latexExpr);
+            lines.push('\\end{align*}');
+            lines.push('');
+          }
         }
       }
 
