@@ -63,6 +63,11 @@
     .tree-node-3d:first-child {
       margin-top: 0;
     }
+    .tree-node-3d.decay-focused {
+      border-left-color: #ffdd44;
+      background: rgba(255, 221, 68, 0.05);
+      border-radius: 0 4px 4px 0;
+    }
     .tree-node-3d > .node-content-3d {
       display: flex;
       flex-wrap: wrap;
@@ -342,7 +347,7 @@
       </div>
       <div id="label-renderer"></div>
       <div class="angle-info-overlay" id="angle-info-overlay" style="display:none;"></div>
-      <div class="viewport-overlay">Drag to rotate · Scroll to zoom</div>
+      <div class="viewport-overlay">Drag to rotate · Scroll to zoom · Click ◇ to focus</div>
     </div>
   </div>
 
@@ -430,6 +435,19 @@
 
     // Angle values: path -> { theta, phi }
     var angleValues = {};
+
+    // Decay centers for focus/click: pathStr -> THREE.Vector3
+    var decayCenters = {};
+    // Currently selected/focused decay path
+    var selectedDecayPath = null;
+    // Smooth target for camera center animation
+    var targetDecayPos = null;
+    // Group for clickable decay markers
+    var clickableGroup = new THREE.Group();
+    scene.add(clickableGroup);
+
+    // Compute root decay position for initial camera centering
+    var defaultRootDecayCenter = new THREE.Vector3(0, 0, 2);
 
     // Colors for particles (by depth)
     const PARTICLE_COLORS = [
@@ -543,6 +561,9 @@
     function renderNodeUI(node, path, nameMap) {
       var div = document.createElement('div');
       div.className = 'tree-node-3d' + (path.length === 0 ? ' tree-root-3d' : '');
+      if (node.children && path.length >= 0) {
+        div.dataset.decayPath = pathKey(path);
+      }
 
       var content = document.createElement('div');
       content.className = 'node-content-3d';
@@ -563,6 +584,20 @@
       // Action buttons
       var actions = document.createElement('div');
       actions.className = 'node-actions-3d';
+
+      // Focus button for decaying nodes (click to center camera on this decay)
+      if (node.children) {
+        var focusBtn = document.createElement('button');
+        focusBtn.textContent = '◎';
+        focusBtn.style.fontSize = '0.7rem';
+        focusBtn.style.color = '#ffdd44';
+        focusBtn.title = 'Center view on this decay';
+        focusBtn.addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          centerOnDecay(path);
+        });
+        actions.appendChild(focusBtn);
+      }
 
       if (node.children) {
         var finalBtn = document.createElement('button');
@@ -695,6 +730,8 @@
     window.resetTree = function() {
       decayTree = { children: null };
       angleValues = {};
+      selectedDecayPath = null;
+      targetDecayPos = null;
       renderTreeUI();
       // Clear scene
       clearScene();
@@ -704,10 +741,39 @@
 
     function resetCamera() {
       camera.position.set(6, 5, 8);
-      controls.target.set(0, 0, 0);
+      // Center on root decay if available
+      if (decayCenters['']) {
+        controls.target.copy(decayCenters['']);
+      } else {
+        controls.target.set(0, 0, 2);
+      }
       controls.update();
     }
     window.resetCamera = resetCamera;
+
+    // ── Center camera on a specific decay vertex ──
+    function centerOnDecay(path) {
+      var pathStr = pathKey(path);
+      var pos = decayCenters[pathStr];
+      if (!pos) return;
+      selectedDecayPath = pathStr;
+      targetDecayPos = pos.clone();
+      // Update sidebar highlight
+      updateDecayHighlight(pathStr);
+    }
+    window.centerOnDecay = centerOnDecay;
+
+    function updateDecayHighlight(selectedPathStr) {
+      // Remove previous highlight from all tree nodes
+      document.querySelectorAll('.decay-focused').forEach(function(el) {
+        el.classList.remove('decay-focused');
+      });
+      // Add highlight to the matching tree node
+      if (selectedPathStr !== null) {
+        var target = document.querySelector('[data-decay-path="' + selectedPathStr + '"]');
+        if (target) target.classList.add('decay-focused');
+      }
+    }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 6. Examples
@@ -743,6 +809,9 @@
       }
       renderTreeUI();
       scheduleRender();
+      // Center on root decay
+      selectedDecayPath = null;
+      targetDecayPos = null;
     };
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -777,6 +846,9 @@
         var child = decayGroup.children[0];
         if (child.geometry) child.geometry.dispose();
         if (child.material) child.material.dispose();
+        if (child.isCSS2DObject && child.element && child.element.parentNode) {
+          child.element.parentNode.removeChild(child.element);
+        }
         decayGroup.remove(child);
       }
       while (labelGroup.children.length) {
@@ -788,6 +860,14 @@
         }
         labelGroup.remove(child);
       }
+      while (clickableGroup.children.length) {
+        var child = clickableGroup.children[0];
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) child.material.dispose();
+        clickableGroup.remove(child);
+      }
+      // Reset center data
+      decayCenters = {};
     }
 
     function doRender() {
@@ -812,7 +892,25 @@
         drawParticle(nd);
         if (nd.childrenInfo) {
           drawDecayVertex(nd, nodeData);
+          // Store decay center for focusing
+          decayCenters[pathStr] = nd.childrenInfo.decayPos.clone();
         }
+      }
+
+      // Draw clickable decay vertex markers
+      for (var pathStr in decayCenters) {
+        drawDecayMarker(decayCenters[pathStr], pathStr);
+      }
+
+      // If a decay was previously selected, re-focus on it (position may have changed)
+      if (selectedDecayPath && decayCenters[selectedDecayPath]) {
+        // Don't animate — just snap if no animation in progress
+        if (!targetDecayPos) {
+          controls.target.copy(decayCenters[selectedDecayPath]);
+        }
+      } else if (!selectedDecayPath && decayCenters['']) {
+        // First render: center on root decay
+        controls.target.copy(decayCenters['']);
       }
 
       // Update angle info overlay
@@ -1025,6 +1123,37 @@
 
     // ── Drawing primitives ──
 
+    // ── Decay vertex marker (clickable) ──
+    function drawDecayMarker(position, pathStr) {
+      // Small diamond shape
+      var geo = new THREE.OctahedronGeometry(0.13, 0);
+      var isSelected = (selectedDecayPath === pathStr);
+      var mat = new THREE.MeshBasicMaterial({
+        color: isSelected ? 0xffdd44 : 0x88aacc,
+        transparent: true,
+        opacity: isSelected ? 1.0 : 0.7,
+      });
+      var mesh = new THREE.Mesh(geo, mat);
+      mesh.position.copy(position);
+      mesh.userData.decayPath = pathStr;
+      clickableGroup.add(mesh);
+
+      // Glow ring around marker
+      var ringGeo = new THREE.RingGeometry(0.18, 0.28, 16);
+      var ringMat = new THREE.MeshBasicMaterial({
+        color: isSelected ? 0xffdd44 : 0x6688aa,
+        transparent: true,
+        opacity: isSelected ? 0.4 : 0.15,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      var ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.copy(position);
+      ring.lookAt(camera.position);
+      ring.userData.decayPath = pathStr;
+      clickableGroup.add(ring);
+    }
+
     function drawLine(from, to, color, lineWidth) {
       var points = [from.clone(), to.clone()];
       var geo = new THREE.BufferGeometry().setFromPoints(points);
@@ -1231,9 +1360,24 @@
     function animate() {
       requestAnimationFrame(animate);
 
+      // Smooth camera center transition
+      if (targetDecayPos) {
+        controls.target.lerp(targetDecayPos, 0.1);
+        if (controls.target.distanceTo(targetDecayPos) < 0.02) {
+          controls.target.copy(targetDecayPos);
+          targetDecayPos = null;
+        }
+      }
+
       // Update glow rings to face camera
       decayGroup.children.forEach(function(child) {
         if (child.isMesh && child.geometry.type === 'RingGeometry') {
+          child.lookAt(camera.position);
+        }
+      });
+      // Also update clickable ring markers
+      clickableGroup.children.forEach(function(child) {
+        if (child.isMesh && child.geometry && child.geometry.type === 'RingGeometry') {
           child.lookAt(camera.position);
         }
       });
@@ -1243,6 +1387,65 @@
       labelRenderer.render(scene, camera);
     }
     animate();
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 11. Click handling (raycasting)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    var raycaster = new THREE.Raycaster();
+    var mouse = new THREE.Vector2();
+    var clickStartPos = { x: 0, y: 0 };
+    var isPointerDown = false;
+
+    renderer.domElement.addEventListener('pointerdown', function(e) {
+      clickStartPos.x = e.clientX;
+      clickStartPos.y = e.clientY;
+      isPointerDown = true;
+    });
+
+    renderer.domElement.addEventListener('pointerup', function(e) {
+      if (!isPointerDown) return;
+      isPointerDown = false;
+      var dx = e.clientX - clickStartPos.x;
+      var dy = e.clientY - clickStartPos.y;
+      // Only treat as click if mouse barely moved (not a drag)
+      if (Math.sqrt(dx * dx + dy * dy) > 6) return;
+
+      var rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      var intersects = raycaster.intersectObjects(clickableGroup.children);
+
+      if (intersects.length > 0) {
+        var hit = intersects[0].object;
+        var pathStr = hit.userData.decayPath;
+        if (pathStr) {
+          centerOnDecay(pathStr.split(',').map(Number));
+          // Visual feedback: briefly highlight
+          if (hit.isMesh && hit.material) {
+            var origColor = hit.material.color.getHex();
+            hit.material.color.setHex(0xffffff);
+            setTimeout(function() {
+              if (hit.material) hit.material.color.setHex(origColor);
+            }, 150);
+          }
+          return;
+        }
+      }
+    });
+
+    // Cursor hover effect
+    renderer.domElement.addEventListener('pointermove', function(e) {
+      var rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, camera);
+      var intersects = raycaster.intersectObjects(clickableGroup.children);
+
+      renderer.domElement.style.cursor = intersects.length > 0 ? 'pointer' : 'default';
+    });
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // 11. Initial render
