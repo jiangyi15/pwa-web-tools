@@ -752,8 +752,9 @@
     window.resetCamera = resetCamera;
 
     // ── Center camera on a specific decay vertex ──
+    // path can be an array (e.g. []) or a string key (e.g. '')
     function centerOnDecay(path) {
-      var pathStr = pathKey(path);
+      var pathStr = typeof path === 'string' ? path : pathKey(path);
       var pos = decayCenters[pathStr];
       if (!pos) return;
       selectedDecayPath = pathStr;
@@ -1420,8 +1421,9 @@
       if (intersects.length > 0) {
         var hit = intersects[0].object;
         var pathStr = hit.userData.decayPath;
-        if (pathStr) {
-          centerOnDecay(pathStr.split(',').map(Number));
+        var hitPathStr = hit.userData.decayPath;
+        if (hitPathStr !== undefined && hitPathStr !== null) {
+          centerOnDecay(hitPathStr);
           // Visual feedback: briefly highlight
           if (hit.isMesh && hit.material) {
             var origColor = hit.material.color.getHex();
