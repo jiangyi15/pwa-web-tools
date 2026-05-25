@@ -654,6 +654,23 @@ where \(N_\phi\) is the number of φ/χ variables and \(N_\theta\) is the number
     }
 
     /**
+     * Sort variable names in reverse order: highest index first, chi last.
+     * This puts the physically deepest cascade angles at the top.
+     */
+    function _reverseVarSort(a, b) {
+      if (a === 'chi') return 1;
+      if (b === 'chi') return -1;
+      // Extract numeric index from "theta_2" or "phi_1"
+      var aIdx = parseInt(a.replace(/\D/g, ''), 10);
+      var bIdx = parseInt(b.replace(/\D/g, ''), 10);
+      if (aIdx !== bIdx) return bIdx - aIdx;  // descending index
+      // Same index: theta before phi (theta deeper in physical sense)
+      if (a.indexOf('theta') !== -1 && b.indexOf('phi') !== -1) return -1;
+      if (a.indexOf('phi') !== -1 && b.indexOf('theta') !== -1) return 1;
+      return a.localeCompare(b);
+    }
+
+    /**
      * Get the integral coefficient and π exponent for a Fourier factor {func, k}
      * over its full range.
      * Returns { n: int, d: int, pi: int }
@@ -806,18 +823,18 @@ where \(N_\phi\) is the number of φ/χ variables and \(N_\theta\) is the number
      */
     function _allVarNames(nDecays, phiCombine) {
       var names = [];
-      for (var i = 0; i < nDecays; i++) {
+      // Reverse order: highest index first (phi_0 / theta_0 are least interesting)
+      for (var i = nDecays - 1; i >= 0; i--) {
         names.push('theta_' + i);
       }
-      // Phi variables: exclude phi_fixIdx (dropped) and phi_chiIdx (→ chi)
-      for (var i = 0; i < nDecays; i++) {
+      for (var i = nDecays - 1; i >= 0; i--) {
         if (phiCombine && (i === phiCombine.fixIdx || i === phiCombine.chiIdx)) continue;
         names.push('phi_' + i);
       }
       if (phiCombine) {
         names.push('chi');
       }
-      return names.sort();
+      return names;
     }
 
     /**
@@ -1358,7 +1375,7 @@ where \(N_\phi\) is the number of φ/χ variables and \(N_\theta\) is the number
       var container = document.getElementById('projection-results');
       if (!container) return;
 
-      var varNames = Object.keys(projections).sort();
+      var varNames = Object.keys(projections).sort(_reverseVarSort);
       if (varNames.length === 0) {
         container.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;">No projections (empty Fourier map).</p>';
         return;
