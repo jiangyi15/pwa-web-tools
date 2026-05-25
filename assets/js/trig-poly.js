@@ -845,14 +845,15 @@ function _tpKeyToLatex(key, opts) {
       if (phiCombine && parseInt(idx, 10) < 0) {
         // Negative idx → χ variable → display as φ_fixIdx + φ_chiIdx
         latexName = '\\phi_{' + phiCombine.fixIdx + '}+\\phi_{' + Math.abs(parseInt(idx, 10)) + '}';
-        if (f.k !== 1) latexName = '(' + latexName + ')';
+        // Wrap in parens when argument has a coefficient (half-angle: k=3+ needs \frac{3}{2}(...) or 2(...))
+        if (f.k !== 1 && f.k !== 2) latexName = '(' + latexName + ')';
       } else {
         latexName = '\\phi_{' + idx + '}';
       }
     } else if (name === 'chi') {
       if (phiCombine) {
         latexName = '\\phi_{' + phiCombine.fixIdx + '}+\\phi_{' + phiCombine.chiIdx + '}';
-        if (f.k !== 1) latexName = '(' + latexName + ')';
+        if (f.k !== 1 && f.k !== 2) latexName = '(' + latexName + ')';
       } else {
         latexName = '\\chi';
       }
@@ -860,34 +861,16 @@ function _tpKeyToLatex(key, opts) {
       latexName = name;
     }
 
-    // Build argument: func(k·name/2)
-    // For phi variables, we use full-angle: func(k·name)
-    // For theta variables, we use half-angle: func(k·name/2)
-    var isPhi = (name.indexOf('phi_') === 0 || name === 'chi');
+    // Build argument: func(k·name/2) — half-angle for all variables
     var k = f.k;
     var arg;
-    if (isPhi) {
-      // Phi: full-angle form cos(k·φ) or sin(k·φ)
-      // Handle half-integer k (from half-integer helicities)
-      var kInt = Math.round(k * 2);
-      if (Math.abs(kInt - k * 2) < 1e-10 && kInt % 2 === 1) {
-        arg = '\\frac{' + kInt + '}{2}' + latexName;
-        if (kInt === 1) arg = '\\frac{' + latexName + '}{2}';
-      } else if (k === 1) {
-        arg = latexName;
-      } else {
-        arg = String(k) + latexName;
-      }
+    if (k === 1) {
+      arg = '\\frac{' + latexName + '}{2}';
+    } else if (k % 2 === 0) {
+      var n = k / 2;
+      arg = (n === 1 ? '' : String(n)) + latexName;
     } else {
-      // Theta: half-angle form cos(k·θ/2) or sin(k·θ/2)
-      if (k === 1) {
-        arg = '\\frac{' + latexName + '}{2}';
-      } else if (k % 2 === 0) {
-        var n = k / 2;
-        arg = (n === 1 ? '' : String(n)) + latexName;
-      } else {
-        arg = '\\frac{' + k + '}{2}' + latexName;
-      }
+      arg = '\\frac{' + k + '}{2}' + latexName;
     }
     parts.push('\\' + f.func + '(' + arg + ')');
   }
@@ -908,7 +891,7 @@ function _tpKeyToLatex(key, opts) {
  * @param {number} cosPow      Exponent of cos(theta/2)
  * @param {string} phiName     Variable name for phi (e.g. "phi_1")
  * @param {string} phiFunc     "cos"|"sin"|"1"
- * @param {number} phiK        Multiplier for phi (m in cos(m·φ))
+ * @param {number} phiK        Half-angle multiplier for phi (k in cos(k·φ/2))
  * @param {boolean} isImag     Is this the imaginary amplitude?
  * @return {TrigPoly}
  */

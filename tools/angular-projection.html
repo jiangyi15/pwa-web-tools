@@ -300,7 +300,7 @@
             <div class="formula-card">
               <h4 class="formula-title">Angular Projections</h4>
               <div class="formula-content" style="font-size: 0.8125rem;">
-The angular distribution I(θ,φ,χ) is expressed as Fourier modes cos(k·θ/2)·cos(k·φ)·sin(k·χ) etc. The θ k is always integer (half-angle basis). The φ/χ k can be half-integer for half-integer spins (e.g., D<sup>1/2</sup>).
+The angular distribution I(θ,φ,χ) is expressed as Fourier modes cos(k·θ/2)·cos(k·φ/2)·sin(k·χ/2) etc. All angles use the same half-angle basis with integer k; for half-integer spins the φ/χ k can be odd (giving φ/2, 3φ/2, …).
 
 <b>1D projections</b> are obtained by integrating over all angles except one:
 \[
@@ -693,17 +693,13 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
           return { n: si.n, d: si.d, pi: si.pi || 0 };
         }
       } else {
-        // φ/χ variable with full-angle: func(k·φ) over [0, 2π]
-        // cos(k·φ): ∫₀²ᵖ cos(k·φ) dφ = sin(2πk)/k = 0 for k ≠ 0
+        // φ/χ variable with half-angle: func(k·var/2) over [0, 2π]
+        // cos(k·var/2): ∫₀²ᵖ cos(k·var/2) d(var) = 0 for k ≠ 0
         if (func === 'cos') return { n: 0, d: 1, pi: 0 };
-        // sin(k·φ): ∫₀²ᵖ sin(k·φ) dφ = (1-cos(2πk))/k
-        //   = 0 for integer k (cos(2πk) = 1)
-        //   = 2/k for half-integer k (cos(2πk) = -1)
-        var kInt = Math.round(k * 2);
-        if (kInt % 2 === 0) return { n: 0, d: 1, pi: 0 };
-        // Half-integer k = kInt/2 with odd kInt: ∫ = 2/k = 4/kInt
-        var g = _gcd(4, Math.abs(kInt));
-        return { n: 4 / g, d: Math.abs(kInt) / g, pi: 0 };
+        // sin(k·var/2): ∫₀²ᵖ sin(k·var/2) d(var) = 0 for even k, 4/k for odd k
+        if (k % 2 === 0) return { n: 0, d: 1, pi: 0 };
+        var g = _gcd(4, Math.abs(k));
+        return { n: 4 / g, d: Math.abs(k) / g, pi: 0 };
       }
     }
 

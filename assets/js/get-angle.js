@@ -294,12 +294,13 @@ function _getOneHelicityStruct(Ja, Jb, Jc, la, lb, lc, thetaIdx, phiIdx, l, s) {
       terms.push(_st(termCoeffStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, '1', 0));
     } else {
       var absLA = Math.abs(la);
+      var phiK = Math.round(2 * absLA);  // half-angle: k·φ/2, always integer
       var sinSign = la < 0 ? -1 : 1;
-      terms.push(_st(termCoeffStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, 'cos', absLA));
+      terms.push(_st(termCoeffStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, 'cos', phiK));
       // For sin: multiply coefficient by sinSign
       var sinSurd = Surd.scale(termSurd, sinSign);
       var sinStr = sinSurd.toString();
-      terms.push(_sti(sinStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, 'sin', absLA));
+      terms.push(_sti(sinStr, thetaIdx, wt.sinPow, wt.cosPow, phiIdx, 'sin', phiK));
     }
   }
   return terms;
@@ -626,7 +627,7 @@ function _basisKey(basis) {
 }
 
 function _pmToLatex(pm) {
-  // pm is a phi multiplier: integer (1,2,3…) or half-integer (0.5, 1.5, …)
+  // pm is a phi multiplier (always integer with half-angle convention)
   // Always non-negative in practice (from Math.abs(la) in _getOneHelicityStruct).
   if (Number.isInteger(pm)) return String(pm);
   var n = Math.abs(Math.round(pm * 2));
@@ -775,16 +776,17 @@ function getAngleFormulaSimplified(decayTree) {
           for (var pi = 0; pi < grp.phiBasis.length; pi++) {
             var pb = grp.phiBasis[pi];
             var pn = phiLatexNames[pb.idx];
-            if (pb.pm && pb.pm !== 1) {
-              trigParts.push('\\' + pb.pf + '(' + _pmToLatex(pb.pm) + pn + ')');
+            // Half-angle: same as θ — cos(k·φ/2), sin(k·φ/2)
+            var arg;
+            if (pb.pm === 1) {
+              arg = '\\frac{' + pn + '}{2}';
+            } else if (pb.pm % 2 === 0) {
+              var n = pb.pm / 2;
+              arg = (n === 1 ? '' : String(n)) + pn;
             } else {
-              // Strip wrapping parens for pm=1 (combined J=0 name needs them for pm≠1)
-              var name = pn;
-              if (name.charAt(0) === '(' && name.charAt(name.length - 1) === ')') {
-                name = name.substring(1, name.length - 1);
-              }
-              trigParts.push('\\' + pb.pf + '(' + name + ')');
+              arg = '\\frac{' + pb.pm + '}{2}' + pn;
             }
+            trigParts.push('\\' + pb.pf + '(' + arg + ')');
           }
           
           // Build complete term (all parts already LaTeX)
