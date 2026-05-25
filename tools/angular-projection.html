@@ -1006,11 +1006,17 @@ with coefficients that may include factors of \(\pi\) from the integrated angle 
       if (isTheta) {
         xMin = 0;
         xMax = Math.PI;
-        yLabel = 'θ';
+        var tIdx = parseInt(varName.replace('theta_', ''), 10);
+        yLabel = 'θ' + String.fromCharCode(0x2080 + tIdx);
+      } else if (varName === 'chi') {
+        xMin = 0;
+        xMax = 2 * Math.PI;
+        yLabel = 'χ';
       } else {
         xMin = 0;
         xMax = 2 * Math.PI;
-        yLabel = varName === 'chi' ? 'χ' : varName;
+        var pIdx = parseInt(varName.replace('phi_', ''), 10);
+        yLabel = 'φ' + String.fromCharCode(0x2080 + pIdx);
       }
 
       // Collect all π groups and their keys
@@ -1332,21 +1338,26 @@ with coefficients that may include factors of \(\pi\) from the integrated angle 
         }
         if (!hasTerms) continue;
 
-        // Variable display name
-        var displayName;
-        if (vn === 'chi') displayName = '\\chi';
-        else if (vn.indexOf('theta_') === 0) {
-          var idx = vn.replace('theta_', '');
-          displayName = '\\theta_{' + idx + '}';
+        // Variable display name (Unicode for header, LaTeX for expression)
+        var displayUnicode, displayLatex;
+        if (vn === 'chi') {
+          displayUnicode = 'χ';
+          displayLatex = '\\chi';
+        } else if (vn.indexOf('theta_') === 0) {
+          var idx = parseInt(vn.replace('theta_', ''), 10);
+          displayUnicode = 'θ' + String.fromCharCode(0x2080 + idx);
+          displayLatex = '\\theta_{' + idx + '}';
         } else if (vn.indexOf('phi_') === 0) {
-          var idx = vn.replace('phi_', '');
-          displayName = '\\phi_{' + idx + '}';
+          var idx = parseInt(vn.replace('phi_', ''), 10);
+          displayUnicode = 'φ' + String.fromCharCode(0x2080 + idx);
+          displayLatex = '\\phi_{' + idx + '}';
         } else {
-          displayName = vn;
+          displayUnicode = vn;
+          displayLatex = vn;
         }
 
         html += '<div class="proj-card">';
-        html += '<div class="proj-card-header">Projection onto \\(I(' + displayName + ')\\)</div>';
+        html += '<div class="proj-card-header">Projection onto I(' + displayUnicode + ')</div>';
         html += '<div class="proj-card-body">';
 
         // Expression
