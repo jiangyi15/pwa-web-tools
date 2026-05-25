@@ -740,9 +740,9 @@ function _tpParseKey(key) {
   var parts = key.split(',');
   var factors = [];
   for (var i = 0; i < parts.length; i++) {
-    var m = parts[i].match(/([\w\d_]+):(\w+)\|(-?\d+)/);
+    var m = parts[i].match(/([\w\d_]+):(\w+)\|(-?[\d.]+)/);
     if (m) {
-      factors.push({ name: m[1], func: m[2], k: parseInt(m[3], 10) });
+      factors.push({ name: m[1], func: m[2], k: parseFloat(m[3]) });
     }
   }
   return factors;
@@ -785,10 +785,10 @@ function _tpSortKey(a, b) {
 
 function _tpMaxK(key) {
   var maxK = 0;
-  var re = /\|(-?\d+)/g;
+  var re = /\|(-?[\d.]+)/g;
   var m;
   while ((m = re.exec(key)) !== null) {
-    maxK = Math.max(maxK, Math.abs(parseInt(m[1], 10)));
+    maxK = Math.max(maxK, Math.abs(parseFloat(m[1])));
   }
   return maxK;
 }
@@ -868,7 +868,16 @@ function _tpKeyToLatex(key, opts) {
     var arg;
     if (isPhi) {
       // Phi: full-angle form cos(k·φ) or sin(k·φ)
-      arg = (k === 1 ? '' : String(k)) + latexName;
+      // Handle half-integer k (from half-integer helicities)
+      var kInt = Math.round(k * 2);
+      if (Math.abs(kInt - k * 2) < 1e-10 && kInt % 2 === 1) {
+        arg = '\\frac{' + kInt + '}{2}' + latexName;
+        if (kInt === 1) arg = '\\frac{' + latexName + '}{2}';
+      } else if (k === 1) {
+        arg = latexName;
+      } else {
+        arg = String(k) + latexName;
+      }
     } else {
       // Theta: half-angle form cos(k·θ/2) or sin(k·θ/2)
       if (k === 1) {

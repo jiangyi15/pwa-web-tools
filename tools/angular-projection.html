@@ -693,8 +693,17 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
           return { n: si.n, d: si.d, pi: si.pi || 0 };
         }
       } else {
-        // φ/χ variable: ∫ cos(k·v) dv = 0, ∫ sin(k·v) dv = 0 for k > 0
-        return { n: 0, d: 1, pi: 0 };
+        // φ/χ variable with full-angle: func(k·φ) over [0, 2π]
+        // cos(k·φ): ∫₀²ᵖ cos(k·φ) dφ = sin(2πk)/k = 0 for k ≠ 0
+        if (func === 'cos') return { n: 0, d: 1, pi: 0 };
+        // sin(k·φ): ∫₀²ᵖ sin(k·φ) dφ = (1-cos(2πk))/k
+        //   = 0 for integer k (cos(2πk) = 1)
+        //   = 2/k for half-integer k (cos(2πk) = -1)
+        var kInt = Math.round(k * 2);
+        if (kInt % 2 === 0) return { n: 0, d: 1, pi: 0 };
+        // Half-integer k = kInt/2 with odd kInt: ∫ = 2/k = 4/kInt
+        var g = _gcd(4, Math.abs(kInt));
+        return { n: 4 / g, d: Math.abs(kInt) / g, pi: 0 };
       }
     }
 
@@ -732,8 +741,8 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
       var parts = key.split(',');
       var result = [];
       for (var i = 0; i < parts.length; i++) {
-        var m = parts[i].match(/([\w\d_]+):(\w+)\|(-?\d+)/);
-        if (m) result.push({ name: m[1], func: m[2], k: parseInt(m[3], 10) });
+        var m = parts[i].match(/([\w\d_]+):(\w+)\|(-?[\d.]+)/);
+        if (m) result.push({ name: m[1], func: m[2], k: parseFloat(m[3]) });
       }
       return result;
     }
