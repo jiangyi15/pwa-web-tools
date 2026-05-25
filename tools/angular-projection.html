@@ -304,14 +304,17 @@ For a given LS combination, the angular distribution I(θ,φ,χ) is expressed as
 
 <b>1D projections</b> are obtained by integrating over all angles except one:
 \[
-I(\theta_i) = \int I \prod_{j\neq i} d(\cos\theta_j) \prod_{k} d\phi_k \prod_{\ell} d\chi_\ell
+I(v) = \int I \prod_{u\neq v} d\mu(u)
 \]
+where \(d\mu(\theta_i) = d(\cos\theta_i)\) and \(d\mu(\phi_i) = d\phi_i\), \(d\mu(\chi) = d\chi\).
 
-Since the Fourier expansion is a sum of products of single-variable functions, integration reduces each variable independently. The result is a 1D Fourier series in the remaining variable, expressed as:
+Since the Fourier expansion is a sum of products of single-variable functions, integration reduces each variable independently. The result is a 1D Fourier series in the remaining variable.
+
+<b>Normalization:</b> Each projection is normalized so that a flat angular distribution I = 1 gives I(v) = 1. The normalization factor is:
 \[
-I(v) = \sum_{k} A_k \cos(k v/2) + B_k \sin(k v/2)
+\text{norm} = \frac{\text{range}(v)}{(2\pi)^{N_\phi}\, 2^{N_\theta}}
 \]
-with coefficients that may include factors of \(\pi\) from the integrated angle measures.
+where \(N_\phi\) is the number of φ/χ variables and \(N_\theta\) is the number of θ variables.
               </div>
             </div>
           </div>
@@ -897,6 +900,43 @@ with coefficients that may include factors of \(\pi\) from the integrated angle 
         results[projVar] = groups;
       }
 
+      // ── Normalize: divide by total phase space (2π)^{N_phi} × 2^{N_theta}
+      //    and multiply by range(v) (2 for θ, 2π for φ/χ).
+      //    This ensures ∫ I_norm(v) d(measure for v) = 1 for flat I.
+      //    Norm surd factor = 2^{1-N_theta-N_phi} (same for both θ and φ)
+      //    Norm π shift = (isThetaProj ? 0 : 1) - N_phi
+      var N_phi = 0, N_theta = 0;
+      for (var i = 0; i < allVars.length; i++) {
+        if (_isThetaVar(allVars[i])) N_theta++;
+        else N_phi++;
+      }
+      var normDen = Math.pow(2, N_theta + N_phi);  // 2^{N_theta+N_phi}
+
+      for (var pv in results) {
+        var groups = results[pv];
+        if (!groups || Object.keys(groups).length === 0) continue;
+        var isThetaProj = _isThetaVar(pv);
+        var piShift = (isThetaProj ? 0 : 1) - N_phi;
+
+        var newGroups = {};
+        for (var pe in groups) {
+          var pi = parseInt(pe, 10);
+          var newPi = pi + piShift;
+          for (var key in groups[pe]) {
+            var scaled = _surSumScale(groups[pe][key], 2, normDen);
+            if (scaled.isEmpty()) continue;
+            if (!newGroups[newPi]) newGroups[newPi] = {};
+            if (!newGroups[newPi][key]) newGroups[newPi][key] = new SurdSum();
+            _surSumAdd(newGroups[newPi][key], scaled);
+          }
+        }
+        // Clean empty groups
+        for (var np in newGroups) {
+          if (Object.keys(newGroups[np]).length === 0) delete newGroups[np];
+        }
+        results[pv] = newGroups;
+      }
+
       return results;
     }
 
@@ -923,7 +963,9 @@ with coefficients that may include factors of \(\pi\) from the integrated angle 
         // Build π term string
         var piStr = '';
         if (piExp === 1) piStr = '\\pi';
+        else if (piExp === -1) piStr = '\\pi^{-1}';
         else if (piExp > 1) piStr = '\\pi^{' + piExp + '}';
+        else if (piExp < -1) piStr = '\\pi^{' + piExp + '}';
 
         for (var ki = 0; ki < keys.length; ki++) {
           var key = keys[ki];
