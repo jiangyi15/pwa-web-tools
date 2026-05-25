@@ -1,0 +1,1430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Angular Projection Tool - Compute 1D projections of I(θ,φ,χ) = Σ|T|² for a single LS combination.">
+  <title>Angular Projection Tool | Partial Wave Analysis Tools</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .input-section {
+      margin-bottom: 1rem;
+    }
+    .input-section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .form-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .form-row .form-input {
+      max-width: 5rem;
+    }
+    .stepper {
+      display: flex;
+      align-items: stretch;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+    .stepper-btn {
+      width: 2rem;
+      border: none;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .stepper-btn:hover {
+      background: var(--accent-glow);
+      color: var(--accent);
+    }
+    .stepper .form-input {
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      padding: 0.4rem 0.25rem;
+      text-align: center;
+      width: 3.5rem;
+    }
+    .latex-render {
+      background: var(--bg-secondary);
+      padding: 1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      text-align: center;
+      color: var(--text-primary);
+      font-size: 1rem;
+    }
+    .latex-render .MathJax {
+      color: var(--accent);
+      font-size: 1.1em;
+    }
+    /* Decay tree styles */
+    .decay-tree {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+    }
+    .tree-node {
+      margin: 0.5rem 0;
+      padding-left: 1.5rem;
+      border-left: 2px solid var(--border);
+    }
+    .tree-node:first-child {
+      margin-top: 0;
+    }
+    .node-content {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0;
+    }
+    .node-label {
+      font-weight: 500;
+      color: var(--text-primary);
+      min-width: 4rem;
+    }
+    .node-angle {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      background: rgba(99, 102, 241, 0.1);
+      padding: 0.125rem 0.4rem;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+    .node-final {
+      color: var(--success);
+      font-size: 0.75rem;
+      padding: 0.125rem 0.375rem;
+      background: rgba(16, 185, 129, 0.1);
+      border-radius: 3px;
+    }
+    .node-decays {
+      color: var(--accent);
+      font-size: 0.75rem;
+      padding: 0.125rem 0.375rem;
+      background: rgba(6, 182, 212, 0.1);
+      border-radius: 3px;
+    }
+    .btn-small {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+    }
+    .btn-icon {
+      padding: 0.25rem;
+      min-width: 1.5rem;
+      height: 1.5rem;
+      line-height: 1;
+    }
+
+    /* ── LS selector ── */
+    .ls-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.75rem 0;
+    }
+    .ls-option {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.3rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-secondary);
+      cursor: pointer;
+      font-size: 0.8125rem;
+      transition: all 0.15s;
+    }
+    .ls-option:hover {
+      border-color: var(--accent);
+    }
+    .ls-option.selected {
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.12);
+    }
+    .ls-option input[type="radio"] {
+      margin: 0;
+      accent-color: var(--accent);
+    }
+
+    /* ── Projection sections ── */
+    .proj-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+    .proj-card-header {
+      padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      background: var(--bg-tertiary);
+    }
+    .proj-card-body {
+      padding: 0.75rem;
+    }
+    .proj-expr {
+      text-align: center;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+      min-height: 2rem;
+      color: var(--accent);
+      font-size: 0.95rem;
+      overflow-x: auto;
+    }
+    .proj-plot-wrap {
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+    .proj-plot-wrap canvas {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 2 / 1;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--bg-primary);
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="../index.html" class="back-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back to Tools
+        </a>
+        <a href="../index.html" class="logo">
+          <div class="logo-icon">⚛</div>
+            <span>Angular Projection Tool</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="calc-page">
+    <div class="container">
+      <div class="calc-header">
+        <h1 class="calc-title">Angular Projection Tool</h1>
+        <p class="calc-subtitle">
+          Compute 1D projections of I(θ,φ,χ) = Σ|T|² integrated over all angles except one
+        </p>
+      </div>
+
+      <div class="calc-grid">
+        <div>
+          <!-- Input Card -->
+          <div class="calc-card">
+            <div class="calc-card-header">
+              <span class="calc-card-icon">🌳</span>
+              <h3 class="calc-card-title">Decay Tree</h3>
+            </div>
+            <div class="calc-card-body">
+              <div class="input-section">
+                <div class="input-section-title">Build Decay Structure</div>
+                <p class="form-hint" style="margin-bottom: 0.5rem;">
+                  Set parent spin, then add children. Each child can either be a final state or decay further.
+                </p>
+                
+                <!-- Root node -->
+                <div id="decay-tree-container" class="decay-tree">
+                  <!-- Tree will be rendered here -->
+                </div>
+              </div>
+
+              <div class="btn-group">
+                <button type="button" class="btn btn-primary" id="calculate-btn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 6v6l4 2"></path>
+                  </svg>
+                  Calculate
+                </button>
+                <button type="button" class="btn btn-secondary" id="reset-btn">Reset</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Examples -->
+          <div class="examples-section">
+            <h4 class="examples-title">Load Examples:</h4>
+            <div class="examples-grid">
+              <button type="button" class="example-btn" data-example='simple'>J=0 → J=0 + J=0</button>
+              <button type="button" class="example-btn" data-example='cascade1'>J=0 → J=1 + J=1 (cascade)</button>
+              <button type="button" class="example-btn" data-example='batch'>J=1,2 → 0+0 (batch)</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <!-- Results Panel -->
+          <div class="results-panel" id="results-panel">
+            <div class="results-header">
+              <div class="results-status">
+                <span class="status-indicator" id="status-indicator"></span>
+                <span id="status-text">Build a decay tree and click Calculate</span>
+              </div>
+            </div>
+            <div class="results-body" id="results-body">
+              <p style="color: var(--text-muted); font-size: 0.875rem;">
+                Results will appear here after calculation.
+              </p>
+            </div>
+          </div>
+
+          <!-- Formula Card -->
+          <div class="formula-section">
+            <div class="formula-card">
+              <h4 class="formula-title">Angular Projections</h4>
+              <div class="formula-content" style="font-size: 0.8125rem;">
+For a given LS combination, the angular distribution I(θ,φ,χ) is expressed as a sum of trigonometric Fourier modes cos(k·θ/2)·cos(m·φ)·sin(n·χ) etc.
+
+<b>1D projections</b> are obtained by integrating over all angles except one:
+\[
+I(\theta_i) = \int I \prod_{j\neq i} d(\cos\theta_j) \prod_{k} d\phi_k \prod_{\ell} d\chi_\ell
+\]
+
+Since the Fourier expansion is a sum of products of single-variable functions, integration reduces each variable independently. The result is a 1D Fourier series in the remaining variable, expressed as:
+\[
+I(v) = \sum_{k} A_k \cos(k v/2) + B_k \sin(k v/2)
+\]
+with coefficients that may include factors of \(\pi\) from the integrated angle measures.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p><a href="../index.html" class="footer-link">← Back to Tools</a></p>
+    </div>
+  </footer>
+
+  <script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(', '\\)']],
+      displayMath: [['\\[', '\\]']]
+    },
+    options: {
+      enableMenu: true
+    }
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+  <script src="../assets/js/surd.js"></script>
+  <script src="../assets/js/cg.js"></script>
+  <script src="../assets/js/wigner-d.js"></script>
+  <script src="../assets/js/trig-poly.js"></script>
+  <script src="../assets/js/get-angle.js"></script>
+  <script src="../assets/js/angular-expression.js"></script>
+  <script>
+    // ══════════════════════════════════════════════════════════
+    // DECAY TREE — reused from angular-distribution.html
+    // ══════════════════════════════════════════════════════════
+
+    var decayTree = {
+      j: 0,
+      children: [
+        { j: 0, children: null },
+        { j: 0, children: null }
+      ]
+    };
+
+    var nodeId = 0;
+
+    function createNode(j, children) {
+      return { j: j || 0, children: children || null };
+    }
+
+    function renderTree() {
+      var container = document.getElementById('decay-tree-container');
+      container.innerHTML = '';
+      nodeId = 0;
+      var angleIdx = { v: 0 };
+      var nameMap = buildPathNameMap(decayTree);
+      container.appendChild(renderNode(decayTree, 'Parent', [], angleIdx, nameMap));
+    }
+
+    function renderNode(node, label, path, angleIdx, nameMap) {
+      var div = document.createElement('div');
+      div.className = 'tree-node';
+      
+      var content = document.createElement('div');
+      content.className = 'node-content';
+      
+      var labelEl = document.createElement('span');
+      labelEl.className = 'node-label';
+      var name = nameMap[path.join(',')] || '';
+      labelEl.textContent = name ? name + ' (' + label + ')' : label;
+      content.appendChild(labelEl);
+      
+      content.appendChild(document.createTextNode('J='));
+      var jInput = document.createElement('input');
+      jInput.type = 'text';
+      jInput.className = 'form-input';
+      jInput.style.width = '3rem';
+      jInput.style.padding = '0.25rem';
+      jInput.value = formatSpinValue(node.j);
+      jInput.dataset.path = path.join(',');
+      jInput.addEventListener('change', function() {
+        updateNodeJ(path, this.value);
+      });
+      content.appendChild(jInput);
+      
+      if (node.children) {
+        var angleIdxLabel = document.createElement('span');
+        angleIdxLabel.className = 'node-angle';
+        angleIdxLabel.textContent = '(φ' + angleIdx.v + ', θ' + angleIdx.v + ')';
+        content.appendChild(angleIdxLabel);
+        angleIdx.v++;
+      }
+      
+      var statusBtn = document.createElement('button');
+      statusBtn.type = 'button';
+      statusBtn.className = 'btn btn-secondary btn-small';
+      if (node.children) {
+        statusBtn.textContent = 'Decays';
+        statusBtn.className = 'btn btn-secondary btn-small node-decays';
+      } else {
+        statusBtn.textContent = 'Final';
+        statusBtn.className = 'btn btn-secondary btn-small node-final';
+      }
+      statusBtn.addEventListener('click', function() {
+        toggleNodeDecay(path);
+      });
+      content.appendChild(statusBtn);
+      
+      if (path.length > 0) {
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-secondary btn-small';
+        removeBtn.textContent = '\u00d7';
+        removeBtn.style.marginLeft = '0.25rem';
+        removeBtn.addEventListener('click', function() {
+          removeNode(path);
+        });
+        content.appendChild(removeBtn);
+      }
+      
+      div.appendChild(content);
+      
+      if (node.children) {
+        var child0Div = renderNode(node.children[0], 'Child 1', path.concat(0), angleIdx, nameMap);
+        var child1Div = renderNode(node.children[1], 'Child 2', path.concat(1), angleIdx, nameMap);
+        div.appendChild(child0Div);
+        div.appendChild(child1Div);
+      }
+      
+      return div;
+    }
+
+    function formatSpinValue(j) {
+      if (j === 0.5 || j === '1/2') return '1/2';
+      if (j === -0.5 || j === '-1/2') return '-1/2';
+      return String(j);
+    }
+
+    function getNodeByPath(path) {
+      var node = decayTree;
+      for (var i = 0; i < path.length; i++) {
+        node = node.children[path[i]];
+      }
+      return node;
+    }
+
+    function updateNodeJ(path, value) {
+      var node = getNodeByPath(path);
+      var s = toSpin(value);
+      node.j = s.value;
+      renderTree();
+    }
+
+    function toggleNodeDecay(path) {
+      var node = getNodeByPath(path);
+      if (node.children) {
+        node.children = null;
+      } else {
+        node.children = [
+          { j: 0, children: null },
+          { j: 0, children: null }
+        ];
+      }
+      renderTree();
+    }
+
+    function removeNode(path) {
+      if (path.length === 0) return;
+      var childIdx = path[path.length - 1];
+      var parent = getNodeByPath(path.slice(0, -1));
+      parent.children[childIdx] = { j: 0, children: null };
+      renderTree();
+    }
+
+    function loadExample(name) {
+      switch (name) {
+        case 'simple':
+          decayTree = { j: 0, children: [{ j: 0, children: null }, { j: 0, children: null }] };
+          break;
+        case 'cascade1':
+          decayTree = {
+            j: 0,
+            children: [
+              { j: 1, children: [{ j: 0, children: null }, { j: 0, children: null }] },
+              { j: 1, children: [{ j: 0, children: null }, { j: 0, children: null }] }
+            ]
+          };
+          break;
+        case 'batch':
+          decayTree = { j: 1, children: [{ j: 0, children: null }, { j: 0, children: null }] };
+          break;
+      }
+      renderTree();
+    }
+
+    function buildPathNameMap(tree) {
+      var map = {};
+      var code = 65;
+      function walk(node, path) {
+        map[path.join(',')] = String.fromCharCode(code);
+        code++;
+        if (node.children) {
+          walk(node.children[0], path.concat(0));
+          walk(node.children[1], path.concat(1));
+        }
+      }
+      if (tree) walk(tree, []);
+      return map;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // PROJECTION COMPUTATION
+    // ══════════════════════════════════════════════════════════
+
+    // ── Integral tables for θ variables ──
+    // I_c(k) = ∫₀^π cos(k·θ/2) sin θ dθ  (as rational, no π)
+    // I_s(k) = ∫₀^π sin(k·θ/2) sin θ dθ  (as {num, den, piExp})
+    var _THETA_COS_INT = {
+      0: { n: 2, d: 1 },
+      1: { n: 4, d: 3 },
+      2: { n: 0, d: 1 },
+      3: { n: -4, d: 5 },
+      4: { n: -2, d: 3 },
+      5: { n: -4, d: 21 },
+      6: { n: 0, d: 1 },
+      7: { n: -4, d: 45 },
+      8: { n: -2, d: 15 },
+      9: { n: -4, d: 77 },
+      10: { n: 0, d: 1 }
+    };
+
+    var _THETA_SIN_INT = {
+      0: { n: 0, d: 1, pi: 0 },
+      1: { n: 4, d: 3, pi: 0 },
+      2: { n: 1, d: 2, pi: 1 },    // π/2
+      3: { n: 4, d: 5, pi: 0 },
+      4: { n: 0, d: 1, pi: 0 },
+      5: { n: -4, d: 21, pi: 0 },
+      6: { n: 0, d: 1, pi: 0 },
+      7: { n: 4, d: 45, pi: 0 },
+      8: { n: 0, d: 1, pi: 0 },
+      9: { n: -4, d: 77, pi: 0 },
+      10: { n: 0, d: 1, pi: 0 }
+    };
+
+    // Extended for larger k via formula
+    function _lookupInt(table, k) {
+      if (table[k]) return table[k];
+      // Compute on-the-fly for k > 10 (rare in practice)
+      if (table === _THETA_COS_INT) {
+        return _computeThetaCosInt(k);
+      } else {
+        return _computeThetaSinInt(k);
+      }
+    }
+
+    function _computeThetaCosInt(k) {
+      // I_c(k) = (J(k+2) - J(k-2)) / 2
+      // J(n) = 2/n * (1 - cos(nπ/2)) for n>0, J(-n) = -J(n), J(0) = 0
+      var jp = _J(k + 2);
+      var jm = _J(k - 2);
+      if (jp === 0 && jm === 0) return { n: 0, d: 1 };
+      // Convert to rational
+      var num = (jp - jm);
+      var den = 2;
+      // Reduce by gcd
+      var g = _gcd(Math.abs(num), den);
+      return { n: num / g, d: den / g };
+    }
+
+    function _computeThetaSinInt(k) {
+      // I_s(k) = (K(k-2) - K(k+2)) / 2
+      // K(n) = 2/n * sin(nπ/2) for n≠0, K(0) = π
+      var km = k - 2;
+      var kp = k + 2;
+      if (km === 0) {
+        // K(0) = π — need to handle π separately
+        var Kp = _K(kp);
+        return { n: -Kp, d: 2, pi: 1 };  // (π - Kp) / 2
+      }
+      if (kp === 0) {
+        var Km = _K(km);
+        return { n: Km, d: 2, pi: 1 };  // (Km - π) / 2
+      }
+      var Kv = _K(km) - _K(kp);
+      if (Kv === 0) return { n: 0, d: 1, pi: 0 };
+      // Kv is integer
+      var g = _gcd(Math.abs(Kv), 2);
+      return { n: Kv / g, d: 2 / g, pi: 0 };
+    }
+
+    function _J(n) {
+      if (n === 0) return 0;
+      if (n < 0) return -_J(-n);
+      // J(n) = 2/n * (1 - cos(nπ/2))
+      var cosVal;
+      if (n % 2 === 0) {
+        // Even n: cos(nπ/2) = (-1)^(n/2)
+        cosVal = (n / 2) % 2 === 0 ? 1 : -1;
+      } else {
+        cosVal = 0;
+      }
+      if (cosVal === 0) return 2 / n;
+      if (cosVal === 1) return 0;
+      // cosVal === -1, 1 - (-1) = 2
+      return 4 / n;
+    }
+
+    function _K(n) {
+      if (n === 0) return 0; // π case handled separately
+      if (n < 0) return _K(-n); // cos is even
+      // K(n) = 2/n * sin(nπ/2)
+      if (n % 2 === 0) return 0;
+      var rem = n % 4;
+      return rem === 1 ? (2 / n) : (-2 / n);
+    }
+
+    // Precompute tables up to k=30
+    (function _buildIntTables() {
+      for (var k = 11; k <= 30; k++) {
+        if (!_THETA_COS_INT[k]) _THETA_COS_INT[k] = _computeThetaCosInt(k);
+        if (!_THETA_SIN_INT[k]) _THETA_SIN_INT[k] = _computeThetaSinInt(k);
+      }
+    })();
+
+    function _gcd(a, b) {
+      while (b !== 0) { var t = b; b = a % b; a = t; }
+      return a;
+    }
+
+    /**
+     * Check whether a variable name is a θ type (half-angle Fourier).
+     */
+    function _isThetaVar(name) {
+      return name.indexOf('theta_') === 0;
+    }
+
+    /**
+     * Get the integral coefficient and π exponent for a Fourier factor {func, k}
+     * over its full range.
+     * Returns { n: int, d: int, pi: int }
+     *   meaning the integral = (n/d) × π^pi
+     *   n=0 means the integral is zero.
+     */
+    function _integralFactor(varName, func, k) {
+      if (k === 0) {
+        // cos(0) = 1, sin(0) = 0
+        if (func === 'sin') return { n: 0, d: 1, pi: 0 };
+        // cos(0) = 1 → ∫ 1 d(measure)
+        return _emptyIntegral(varName);
+      }
+      if (_isThetaVar(varName)) {
+        if (func === 'cos') {
+          var ci = _lookupInt(_THETA_COS_INT, k);
+          return { n: ci.n, d: ci.d, pi: 0 };
+        } else {
+          var si = _lookupInt(_THETA_SIN_INT, k);
+          return { n: si.n, d: si.d, pi: si.pi || 0 };
+        }
+      } else {
+        // φ/χ variable: ∫ cos(k·v) dv = 0, ∫ sin(k·v) dv = 0 for k > 0
+        return { n: 0, d: 1, pi: 0 };
+      }
+    }
+
+    /**
+     * Integral over a variable that does NOT appear in the Fourier factor.
+     * Returns { n, d, pi } where the integral = (n/d) × π^pi.
+     */
+    function _emptyIntegral(varName) {
+      if (_isThetaVar(varName)) {
+        // ∫ sin θ dθ from 0 to π = 2
+        return { n: 2, d: 1, pi: 0 };
+      } else {
+        // ∫ dv from 0 to 2π = 2π
+        return { n: 2, d: 1, pi: 1 };
+      }
+    }
+
+    /**
+     * Combine two integral factors: multiply both n/d and add π exponents.
+     */
+    function _mulIntFactors(a, b) {
+      if (a.n === 0 || b.n === 0) return { n: 0, d: 1, pi: 0 };
+      var num = a.n * b.n;
+      var den = a.d * b.d;
+      var pi = (a.pi || 0) + (b.pi || 0);
+      var g = _gcd(Math.abs(num), den);
+      return { n: num / g, d: den / g, pi: pi };
+    }
+
+    /**
+     * Parse a Fourier key into an array of {name, func, k}.
+     */
+    function _parseFourierKey(key) {
+      if (key === '1') return [];
+      var parts = key.split(',');
+      var result = [];
+      for (var i = 0; i < parts.length; i++) {
+        var m = parts[i].match(/([\w\d_]+):(\w+)\|(-?\d+)/);
+        if (m) result.push({ name: m[1], func: m[2], k: parseInt(m[3], 10) });
+      }
+      return result;
+    }
+
+    /**
+     * Build a canonical Fourier key from sorted factor descriptors.
+     */
+    function _makeFourierKey(factors) {
+      if (!factors || factors.length === 0) return '1';
+      // Sort by name, then k, then func
+      var sorted = factors.slice().sort(function(a, b) {
+        if (a.name !== b.name) return a.name < b.name ? -1 : 1;
+        if (a.k !== b.k) return a.k - b.k;
+        return a.func < b.func ? -1 : (a.func > b.func ? 1 : 0);
+      });
+      return sorted.map(function(f) { return f.name + ':' + f.func + '|' + f.k; }).join(',');
+    }
+
+    /**
+     * Extract the unique variable names from a Fourier map (the keys of lsMap).
+     * Returns: array of variable name strings.
+     */
+    function _extractVarNames(fourierMap) {
+      var names = {};
+      for (var key in fourierMap) {
+        if (key === '1') continue;
+        var factors = _parseFourierKey(key);
+        for (var i = 0; i < factors.length; i++) {
+          names[factors[i].name] = true;
+        }
+      }
+      return Object.keys(names).sort();
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // SurdSum helpers (missing from surd.js)
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * Scale all terms in a SurdSum by rational n/d.
+     */
+    function _surSumScale(sum, n, d) {
+      if (n === 0 || sum.isEmpty()) return new SurdSum();
+      var result = new SurdSum();
+      var terms = sum.terms();
+      for (var i = 0; i < terms.length; i++) {
+        var s = Surd.scale(terms[i], n, d);
+        if (!s.isZero()) result.add(s);
+      }
+      return result;
+    }
+
+    /**
+     * Add all terms from 'other' SurdSum into 'target' SurdSum.
+     * Returns target for chaining.
+     */
+    function _surSumAdd(target, other) {
+      if (other.isEmpty()) return target;
+      var terms = other.terms();
+      for (var i = 0; i < terms.length; i++) {
+        target.add(terms[i]);
+      }
+      return target;
+    }
+
+    /**
+     * Convert a Surd to a floating-point number.
+     */
+    function _surdFloat(s) {
+      var v = s.s * s.p / s.q;
+      if (s.r > 1) v *= Math.sqrt(s.r);
+      return v;
+    }
+
+    /**
+     * Convert a SurdSum to a floating-point number.
+     */
+    function _surSumFloat(sum) {
+      var t = 0;
+      var terms = sum.terms();
+      for (var i = 0; i < terms.length; i++) t += _surdFloat(terms[i]);
+      return t;
+    }
+
+    /**
+     * Build the full list of variable names from nDecays and phiCombine.
+     */
+    function _allVarNames(nDecays, phiCombine) {
+      var names = [];
+      for (var i = 0; i < nDecays; i++) {
+        names.push('theta_' + i);
+      }
+      // Phi variables: exclude phi_fixIdx (dropped) and phi_chiIdx (→ chi)
+      for (var i = 0; i < nDecays; i++) {
+        if (phiCombine && (i === phiCombine.fixIdx || i === phiCombine.chiIdx)) continue;
+        names.push('phi_' + i);
+      }
+      if (phiCombine) {
+        names.push('chi');
+      }
+      return names.sort();
+    }
+
+    /**
+     * Compute 1D projections of a Fourier map onto each variable.
+     *
+     * @param {Object} fourierMap  { key: SurdSum } from AngularExpression
+     * @param {number} nDecays     Number of decay vertices
+     * @param {Object|null} phiCombine  J=0 combine info
+     * @return {Object}  { varName: { 0: {key: SurdSum}, 1: {key: SurdSum}, ... } }
+     *   where the outer group key is the π exponent.
+     */
+    function computeProjections(fourierMap, nDecays, phiCombine) {
+      var allVars = _allVarNames(nDecays, phiCombine);
+      var results = {};
+
+      for (var vi = 0; vi < allVars.length; vi++) {
+        var projVar = allVars[vi];
+        // Group by π exponent: { piExp: { fourierKey: SurdSum } }
+        var groups = {};
+
+        for (var key in fourierMap) {
+          var sum = fourierMap[key];
+          if (sum.isEmpty()) continue;
+
+          var factors = _parseFourierKey(key);
+          var totalInt = { n: 1, d: 1, pi: 0 };
+          var projFactor = null;
+          var otherFactors = [];
+          var kill = false;
+
+          for (var fi = 0; fi < factors.length; fi++) {
+            var f = factors[fi];
+            if (f.name === projVar) {
+              projFactor = f;
+            } else {
+              var intF = _integralFactor(f.name, f.func, f.k);
+              if (intF.n === 0) { kill = true; break; }
+              totalInt = _mulIntFactors(totalInt, intF);
+            }
+          }
+          if (kill) continue;
+
+          // Integrate over non-appearing variables (that are NOT the projection variable)
+          for (var avi = 0; avi < allVars.length; avi++) {
+            var av = allVars[avi];
+            if (av === projVar) continue;
+            var found = false;
+            for (var fi = 0; fi < factors.length; fi++) {
+              if (factors[fi].name === av) { found = true; break; }
+            }
+            if (!found) {
+              var emptyI = _emptyIntegral(av);
+              totalInt = _mulIntFactors(totalInt, emptyI);
+            }
+          }
+
+          if (totalInt.n === 0) continue;
+
+          // The contribution to the projection: scale SurdSum by totalInt.n/totalInt.d
+          var piExp = totalInt.pi;
+          if (!groups[piExp]) groups[piExp] = {};
+
+          // Build the resulting Fourier key (only the projection variable's factor, or constant)
+          var outKey;
+          if (projFactor) {
+            outKey = _makeFourierKey([projFactor]);
+          } else {
+            outKey = '1';
+          }
+
+          // Scale SurdSum by n/d
+          var scaled = _surSumScale(sum, totalInt.n, totalInt.d);
+          if (scaled.isEmpty()) continue;
+
+          if (!groups[piExp][outKey]) groups[piExp][outKey] = new SurdSum();
+          _surSumAdd(groups[piExp][outKey], scaled);
+          if (groups[piExp][outKey].isEmpty()) delete groups[piExp][outKey];
+        }
+
+        results[projVar] = groups;
+      }
+
+      return results;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // LATEX RENDERING with π grouping
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * Render a π-grouped projection map to LaTeX.
+     * groups: { 0: { key: SurdSum }, 1: { key: SurdSum }, ... }
+     */
+    function _renderProjGroups(groups, varName, phiCombine) {
+      var piExps = Object.keys(groups).map(Number).sort(function(a, b) { return a - b; });
+      if (piExps.length === 0) return '= 0';
+
+      var lines = '';
+      var firstOverall = true;
+
+      for (var piIdx = 0; piIdx < piExps.length; piIdx++) {
+        var piExp = piExps[piIdx];
+        var fourier = groups[piExp];
+        var keys = Object.keys(fourier).sort(_tpSortKey);
+
+        // Build π term string
+        var piStr = '';
+        if (piExp === 1) piStr = '\\pi';
+        else if (piExp > 1) piStr = '\\pi^{' + piExp + '}';
+
+        for (var ki = 0; ki < keys.length; ki++) {
+          var key = keys[ki];
+          var sum = fourier[key];
+          if (sum.isEmpty()) continue;
+
+          var sumStr = sum.toLatex();
+          if (sumStr === '0') continue;
+
+          // Combine surd with π
+          var piCombined;
+          if (piExp === 0) {
+            piCombined = sumStr;
+          } else {
+            // surd × π^piExp
+            if (sumStr === '1') {
+              piCombined = piStr;
+            } else if (sumStr === '-1') {
+              piCombined = '-' + piStr;
+            } else {
+              piCombined = sumStr + piStr;
+            }
+          }
+
+          var fourierStr = _tpKeyToLatex(key, { phiCombine: phiCombine });
+
+          // No separator between π and Fourier term if π is first
+          if (!firstOverall) {
+            if (piCombined.charAt(0) === '-') {
+              lines += ' \\!-\\! ';
+              piCombined = piCombined.substring(1);
+            } else {
+              lines += ' \\!+\\! ';
+            }
+          }
+          lines += piCombined;
+          if (fourierStr) lines += '\\,' + fourierStr;
+          firstOverall = false;
+        }
+      }
+
+      return '= ' + lines;
+    }
+
+    /**
+     * Render a single π-grouped projection showing the constant term prominently.
+     */
+    function renderProjectionLatex(groups, varName, phiCombine) {
+      if (!groups || Object.keys(groups).length === 0) return '= 0';
+      return _renderProjGroups(groups, varName, phiCombine);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // CANVAS PLOTTING
+    // ══════════════════════════════════════════════════════════
+
+    /**
+     * Plot a projection on a canvas.
+     * @param {HTMLCanvasElement} canvas
+     * @param {Object} groups  { piExp: { key: SurdSum } }
+     * @param {string} varName  "theta_0", "phi_1", "chi", etc.
+     * @param {number} w_canvas  canvas pixel width
+     * @param {number} h_canvas  canvas pixel height
+     */
+    function plotProjection(canvas, groups, varName, w_canvas, h_canvas) {
+      if (!groups || Object.keys(groups).length === 0) return;
+
+      canvas.width = w_canvas || 600;
+      canvas.height = h_canvas || 300;
+      var ctx = canvas.getContext('2d');
+      var W = canvas.width;
+      var H = canvas.height;
+      var pad = { top: 20, bottom: 30, left: 50, right: 20 };
+      var plotW = W - pad.left - pad.right;
+      var plotH = H - pad.top - pad.bottom;
+
+      // Determine evaluation range
+      var xMin, xMax, yLabel;
+      var isTheta = _isThetaVar(varName);
+      if (isTheta) {
+        xMin = 0;
+        xMax = Math.PI;
+        yLabel = 'θ';
+      } else {
+        xMin = 0;
+        xMax = 2 * Math.PI;
+        yLabel = varName === 'chi' ? 'χ' : varName;
+      }
+
+      // Collect all π groups and their keys
+      var piExps = Object.keys(groups).map(Number);
+      // Collect all unique (func, k) pairs from all groups
+      var terms = {};
+      for (var piIdx = 0; piIdx < piExps.length; piIdx++) {
+        var piExp = piExps[piIdx];
+        var fourier = groups[piExp];
+        var keys = Object.keys(fourier);
+        for (var ki = 0; ki < keys.length; ki++) {
+          var key = keys[ki];
+          if (key === '1') {
+            if (!terms['1']) terms['1'] = { surdSum: new SurdSum(), piExp: piExp };
+            _surSumAdd(terms['1'].surdSum, fourier[key]);
+          } else {
+            var factors = _parseFourierKey(key);
+            for (var fi = 0; fi < factors.length; fi++) {
+              var fKey = factors[fi].func + '|' + factors[fi].k;
+              if (!terms[fKey]) terms[fKey] = { surdSum: new SurdSum(), piExp: piExp };
+              _surSumAdd(terms[fKey].surdSum, fourier[key]);
+            }
+          }
+        }
+      }
+
+      // Sample points
+      var nSamples = 200;
+      var xs = [];
+      var ys = [];
+      var yMin = Infinity, yMax = -Infinity;
+
+      for (var si = 0; si <= nSamples; si++) {
+        var t = si / nSamples;
+        var x = xMin + t * (xMax - xMin);
+        var y = 0;
+
+        for (var tk in terms) {
+          var term = terms[tk];
+          var val;
+          if (tk === '1') {
+            val = 1;
+          } else {
+            var parts = tk.split('|');
+            var func = parts[0];
+            var k = parseInt(parts[1], 10);
+            var arg = k * x;
+            if (isTheta) arg = arg / 2;  // θ is half-angle
+            val = (func === 'cos') ? Math.cos(arg) : Math.sin(arg);
+          }
+          var coeff = _surSumFloat(term.surdSum) * Math.pow(Math.PI, term.piExp);
+          y += coeff * val;
+        }
+
+        xs.push(x);
+        ys.push(y);
+        if (y < yMin) yMin = y;
+        if (y > yMax) yMax = y;
+      }
+
+      // Handle edge case: all same y
+      if (yMax - yMin < 1e-15) {
+        yMin -= 1;
+        yMax += 1;
+      }
+
+      // Add some padding
+      var yRange = yMax - yMin;
+      yMin -= yRange * 0.1;
+      yMax += yRange * 0.1;
+
+      // Precompute axis tick values
+      var yTicks = _niceTicks(yMin, yMax, 5);
+      var xTicks = isTheta ? [0, Math.PI/4, Math.PI/2, 3*Math.PI/4, Math.PI]
+                          : [0, Math.PI/2, Math.PI, 3*Math.PI/2, 2*Math.PI];
+
+      // Clear
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#1e1e2e';
+      ctx.fillRect(0, 0, W, H);
+
+      function toCanvasX(x) { return pad.left + (x - xMin) / (xMax - xMin) * plotW; }
+      function toCanvasY(y) { return pad.top + (yMax - y) / (yMax - yMin) * plotH; }
+
+      // Grid lines
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      for (var i = 0; i < yTicks.length; i++) {
+        var yy = toCanvasY(yTicks[i]);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, yy);
+        ctx.lineTo(W - pad.right, yy);
+        ctx.stroke();
+      }
+      for (var i = 0; i < xTicks.length; i++) {
+        var xx = toCanvasX(xTicks[i]);
+        ctx.beginPath();
+        ctx.moveTo(xx, pad.top);
+        ctx.lineTo(xx, H - pad.bottom);
+        ctx.stroke();
+      }
+
+      // Axes
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, pad.top);
+      ctx.lineTo(pad.left, H - pad.bottom);
+      ctx.lineTo(W - pad.right, H - pad.bottom);
+      ctx.stroke();
+
+      // Y-axis labels
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.font = '11px sans-serif';
+      ctx.textAlign = 'right';
+      for (var i = 0; i < yTicks.length; i++) {
+        var yy = toCanvasY(yTicks[i]);
+        var label = yTicks[i] % 1 === 0 ? String(yTicks[i]) : yTicks[i].toFixed(2);
+        ctx.fillText(label, pad.left - 5, yy + 4);
+      }
+
+      // X-axis labels
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      for (var i = 0; i < xTicks.length; i++) {
+        var xx = toCanvasX(xTicks[i]);
+        var label;
+        if (xTicks[i] === 0) label = '0';
+        else if (xTicks[i] === Math.PI) label = 'π';
+        else if (xTicks[i] === 2*Math.PI) label = '2π';
+        else if (xTicks[i] === Math.PI/2) label = 'π/2';
+        else if (xTicks[i] === 3*Math.PI/2) label = '3π/2';
+        else if (xTicks[i] === Math.PI/4) label = 'π/4';
+        else if (xTicks[i] === 3*Math.PI/4) label = '3π/4';
+        else label = xTicks[i].toFixed(2);
+        ctx.fillText(label, xx, H - pad.bottom + 16);
+      }
+
+      // Axis title
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = '12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(yLabel, W / 2, H - 4);
+
+      // Data line
+      ctx.strokeStyle = '#818cf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (var si = 0; si < xs.length; si++) {
+        var cx = toCanvasX(xs[si]);
+        var cy = toCanvasY(ys[si]);
+        if (si === 0) ctx.moveTo(cx, cy);
+        else ctx.lineTo(cx, cy);
+      }
+      ctx.stroke();
+
+      // Zero line (if visible)
+      if (yMin < 0 && yMax > 0) {
+        var zy = toCanvasY(0);
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, zy);
+        ctx.lineTo(W - pad.right, zy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    function _niceTicks(min, max, n) {
+      var range = _niceNum(max - min, false);
+      var step = _niceNum(range / (n - 1), true);
+      var start = Math.ceil(min / step) * step;
+      var ticks = [];
+      for (var v = start; v <= max + step * 0.5; v += step) {
+        ticks.push(v);
+      }
+      return ticks;
+    }
+
+    function _niceNum(x, round) {
+      var exp = Math.floor(Math.log10(Math.abs(x)));
+      var f = x / Math.pow(10, exp);
+      var nice;
+      if (round) {
+        if (f < 1.5) nice = 1;
+        else if (f < 3) nice = 2;
+        else if (f < 7) nice = 5;
+        else nice = 10;
+      } else {
+        if (f <= 1) nice = 1;
+        else if (f <= 2) nice = 2;
+        else if (f <= 5) nice = 5;
+        else nice = 10;
+      }
+      return nice * Math.pow(10, exp);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // TOOL LOGIC
+    // ══════════════════════════════════════════════════════════
+
+    var _lastLSMap = null;
+    var _lastPhiCombine = null;
+    var _lastNDecays = 0;
+    var _lastProjections = null;
+
+    function calculate() {
+      if (!decayTree.children) {
+        showError('Root particle must decay.');
+        return;
+      }
+
+      var statusIndicator = document.getElementById('status-indicator');
+      var statusText = document.getElementById('status-text');
+      var resultsBody = document.getElementById('results-body');
+
+      statusIndicator.className = 'status-indicator';
+      statusText.textContent = 'Computing...';
+      resultsBody.innerHTML = '<p style="color: var(--text-muted);" class="loading">Computing angular distribution...</p>';
+
+      setTimeout(function() {
+        try {
+          var result = AngularExpression.compute(decayTree, { showInterference: false });
+          if (!result || result.error) {
+            showError(result ? result.error : 'Computation failed');
+            return;
+          }
+
+          _lastLSMap = result.lsMap;
+          _lastPhiCombine = result.phiCombine;
+          _lastNDecays = result.nDecays;
+          _lastProjections = null;
+
+          var lsKeys = result.lsKeyList || Object.keys(result.lsMap).sort();
+
+          if (lsKeys.length === 0) {
+            showError('No valid LS combinations found.');
+            return;
+          }
+
+          statusIndicator.className = 'status-indicator success';
+          statusText.textContent = lsKeys.length + ' LS component(s) found. Select one below.';
+
+          var html = '<div style="margin-bottom:0.75rem;">';
+          html += '<div style="font-size:0.8rem;font-weight:600;color:var(--text-primary);margin-bottom:0.4rem;">Select LS combination:</div>';
+          html += '<div class="ls-selector" id="ls-selector">';
+          for (var i = 0; i < lsKeys.length; i++) {
+            html += '<label class="ls-option">';
+            html += '<input type="radio" name="ls-key" value="' + escapeHtml(lsKeys[i]) + '"';
+            if (i === 0) html += ' checked';
+            html += ' onchange="onLSSelect(this.value)">';
+            html += '<span>(<var>l</var>,<var>s</var>) = (' + lsKeys[i] + ')</span>';
+            html += '</label>';
+          }
+          html += '</div>';
+
+          // Projection results container
+          html += '<div id="projection-results">';
+          html += '<p style="color:var(--text-muted);font-size:0.85rem;">Select an LS combination above to see its projections.</p>';
+          html += '</div>';
+          html += '</div>';
+
+          resultsBody.innerHTML = html;
+
+          // Auto-select first LS
+          if (lsKeys.length > 0) {
+            onLSSelect(lsKeys[0]);
+          }
+
+        } catch (e) {
+          showError('Computation error: ' + (e.message || e));
+        }
+      }, 10);
+    }
+
+    function onLSSelect(lsKey) {
+      if (!_lastLSMap || !_lastLSMap[lsKey]) return;
+
+      var fourier = _lastLSMap[lsKey].fourier;
+      var nDecays = _lastNDecays;
+      var phiCombine = _lastPhiCombine;
+
+      // Compute projections
+      var projections = computeProjections(fourier, nDecays, phiCombine);
+      _lastProjections = projections;
+
+      // Update selected style
+      var labels = document.querySelectorAll('.ls-option');
+      for (var i = 0; i < labels.length; i++) {
+        var input = labels[i].querySelector('input');
+        labels[i].className = 'ls-option' + (input && input.checked ? ' selected' : '');
+      }
+
+      // Display projections
+      var container = document.getElementById('projection-results');
+      if (!container) return;
+
+      var varNames = Object.keys(projections).sort();
+      if (varNames.length === 0) {
+        container.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;">No projections (empty Fourier map).</p>';
+        return;
+      }
+
+      var html = '';
+      for (var vi = 0; vi < varNames.length; vi++) {
+        var vn = varNames[vi];
+        var groups = projections[vn];
+
+        // Check if all pi groups are empty
+        var hasTerms = false;
+        for (var pe in groups) {
+          var fk = Object.keys(groups[pe]);
+          for (var fi = 0; fi < fk.length; fi++) {
+            if (!groups[pe][fk[fi]].isEmpty()) { hasTerms = true; break; }
+          }
+          if (hasTerms) break;
+        }
+        if (!hasTerms) continue;
+
+        // Variable display name
+        var displayName;
+        if (vn === 'chi') displayName = '\\chi';
+        else if (vn.indexOf('theta_') === 0) {
+          var idx = vn.replace('theta_', '');
+          displayName = '\\theta_{' + idx + '}';
+        } else if (vn.indexOf('phi_') === 0) {
+          var idx = vn.replace('phi_', '');
+          displayName = '\\phi_{' + idx + '}';
+        } else {
+          displayName = vn;
+        }
+
+        html += '<div class="proj-card">';
+        html += '<div class="proj-card-header">Projection onto \\(I(' + displayName + ')\\)</div>';
+        html += '<div class="proj-card-body">';
+
+        // Expression
+        var latexExpr = renderProjectionLatex(groups, vn, phiCombine);
+        html += '<div class="proj-expr"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div>';
+
+        // Plot
+        var canvasId = 'proj-canvas-' + vi;
+        html += '<div class="proj-plot-wrap"><canvas id="' + canvasId + '"></canvas></div>';
+
+        html += '</div></div>';
+      }
+
+      container.innerHTML = html;
+
+      // Render LaTeX
+      if (typeof MathJax !== 'undefined' && MathJax.typesetPromise) {
+        var cells = container.querySelectorAll('.latex-cell');
+        for (var i = 0; i < cells.length; i++) {
+          if (MathJax.typesetClear) MathJax.typesetClear([cells[i]]);
+          cells[i].innerHTML = '\\(' + cells[i].dataset.latex + '\\)';
+        }
+        MathJax.typesetPromise(cells).catch(function(err) {});
+      }
+
+      // Draw canvases after a short delay to ensure DOM is ready
+      setTimeout(function() {
+        for (var vi = 0; vi < varNames.length; vi++) {
+          var vn = varNames[vi];
+          var groups = projections[vn];
+          var canvas = document.getElementById('proj-canvas-' + vi);
+          if (canvas) {
+            var rect = canvas.parentElement.getBoundingClientRect();
+            var w = Math.min(rect.width || 500, 600);
+            plotProjection(canvas, groups, vn, w, Math.round(w * 0.5));
+          }
+        }
+      }, 50);
+    }
+
+    function showError(msg) {
+      document.getElementById('status-indicator').className = 'status-indicator error';
+      document.getElementById('status-text').textContent = 'Error';
+      document.getElementById('results-body').innerHTML = '<div class="result-error"><strong>Error</strong><br>' + msg + '</div>';
+    }
+
+    function clearResults() {
+      document.getElementById('status-indicator').className = 'status-indicator';
+      document.getElementById('status-text').textContent = 'Build a decay tree and click Calculate';
+      document.getElementById('results-body').innerHTML = '<p style="color: var(--text-muted); font-size: 0.875rem;">Results will appear here after calculation.</p>';
+      _lastLSMap = null;
+      _lastPhiCombine = null;
+      _lastProjections = null;
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ── Event handlers ──
+    document.getElementById('calculate-btn').addEventListener('click', calculate);
+    document.getElementById('reset-btn').addEventListener('click', function() {
+      decayTree = { j: 0, children: [{ j: 0, children: null }, { j: 0, children: null }] };
+      renderTree();
+      clearResults();
+    });
+
+    document.querySelectorAll('.example-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        loadExample(this.dataset.example);
+        clearResults();
+      });
+    });
+
+    // Render tree on load
+    document.addEventListener('DOMContentLoaded', function() {
+      renderTree();
+    });
+  </script>
+</body>
+</html>
