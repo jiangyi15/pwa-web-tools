@@ -310,11 +310,11 @@ where \(d\mu(\theta_i) = d(\cos\theta_i)\) and \(d\mu(\phi_i) = d\phi_i\), \(d\m
 
 Since the Fourier expansion is a sum of products of single-variable functions, integration reduces each variable independently. The result is a 1D Fourier series in the remaining variable.
 
-<b>Normalization:</b> The angular distribution is normalized with a uniform factor:
+<b>Normalization:</b> The angular distribution is normalized so that a uniform distribution gives marginal density \(I(\cos\theta_i) = 1/2\) and \(I(\phi_i) = I(\chi) = 1/(2\pi)\). The normalization factor is:
 \[
-\text{norm} = \frac{1}{(4\pi)^N} \prod_i (2J_i+1)
+\text{norm} = \frac{\prod_i (2J_i+1)}{2^{N_\theta}\, (2\pi)^{N_\phi}}
 \]
-where \(N\) is the total number of angle variables and \(J_i\) is the spin of the mother particle at each decay vertex.
+where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of φ/χ variables, and \(J_i\) is the spin of the mother particle at each decay vertex.
               </div>
             </div>
           </div>
@@ -867,7 +867,13 @@ where \(N\) is the total number of angle variables and \(J_i\) is the spin of th
       var allVars = _allVarNames(nDecays, phiCombine);
       var N = allVars.length;
       var spinProduct = _computeSpinProduct(decayTree || { j: 0, children: null });
-      var normDen = Math.pow(4, N);
+      // Count θ and φ/χ variables for per-type normalization
+      var N_phi = 0, N_theta = 0;
+      for (var i = 0; i < allVars.length; i++) {
+        if (_isThetaVar(allVars[i])) N_theta++;
+        else N_phi++;
+      }
+      var normDen = Math.pow(2, N);  // 2^{N_theta+N_phi}
       var results = {};
 
       for (var vi = 0; vi < allVars.length; vi++) {
@@ -913,10 +919,11 @@ where \(N\) is the total number of angle variables and \(J_i\) is the spin of th
 
           if (totalInt.n === 0) continue;
 
-          // ── Apply normalization: multiply by spinProduct / (4π)^N
+          // ── Apply normalization: ∏(2J_i+1) / (2^N_θ × (2π)^N_φ)
+          //    This gives I_proj(cos θ) = 1/2 and I_proj(φ) = 1/(2π) for flat I = 1.
           totalInt.n *= spinProduct;
-          totalInt.d *= normDen;
-          totalInt.pi = (totalInt.pi || 0) - N;
+          totalInt.d *= normDen;  // 2^N
+          totalInt.pi = (totalInt.pi || 0) - N_phi;
           var rg = _gcd(Math.abs(totalInt.n), totalInt.d);
           totalInt.n /= rg;
           totalInt.d /= rg;
