@@ -865,6 +865,9 @@ where \(N\) is the total number of angle variables and \(J_i\) is the spin of th
      */
     function computeProjections(fourierMap, nDecays, phiCombine, decayTree) {
       var allVars = _allVarNames(nDecays, phiCombine);
+      var N = allVars.length;
+      var spinProduct = _computeSpinProduct(decayTree || { j: 0, children: null });
+      var normDen = Math.pow(4, N);
       var results = {};
 
       for (var vi = 0; vi < allVars.length; vi++) {
@@ -910,6 +913,14 @@ where \(N\) is the total number of angle variables and \(J_i\) is the spin of th
 
           if (totalInt.n === 0) continue;
 
+          // ── Apply normalization: multiply by spinProduct / (4π)^N
+          totalInt.n *= spinProduct;
+          totalInt.d *= normDen;
+          totalInt.pi = (totalInt.pi || 0) - N;
+          var rg = _gcd(Math.abs(totalInt.n), totalInt.d);
+          totalInt.n /= rg;
+          totalInt.d /= rg;
+
           // The contribution to the projection: scale SurdSum by totalInt.n/totalInt.d
           var piExp = totalInt.pi;
           if (!groups[piExp]) groups[piExp] = {};
@@ -932,36 +943,6 @@ where \(N\) is the total number of angle variables and \(J_i\) is the spin of th
         }
 
         results[projVar] = groups;
-      }
-
-      // ── Normalize: divide by (4π)^N and multiply by ∏(2J_i+1)
-      //    Uniform normalization for all angle types.
-      var N = allVars.length;
-      var normDen = Math.pow(4, N);  // 4^N = 2^{2N}
-      var spinProduct = _computeSpinProduct(decayTree || { j: 0, children: null });
-
-      for (var pv in results) {
-        var groups = results[pv];
-        if (!groups || Object.keys(groups).length === 0) continue;
-        var piShift = -N;
-
-        var newGroups = {};
-        for (var pe in groups) {
-          var pi = parseInt(pe, 10);
-          var newPi = pi + piShift;
-          for (var key in groups[pe]) {
-            var scaled = _surSumScale(groups[pe][key], spinProduct, normDen);
-            if (scaled.isEmpty()) continue;
-            if (!newGroups[newPi]) newGroups[newPi] = {};
-            if (!newGroups[newPi][key]) newGroups[newPi][key] = new SurdSum();
-            _surSumAdd(newGroups[newPi][key], scaled);
-          }
-        }
-        // Clean empty groups
-        for (var np in newGroups) {
-          if (Object.keys(newGroups[np]).length === 0) delete newGroups[np];
-        }
-        results[pv] = newGroups;
       }
 
       return results;
