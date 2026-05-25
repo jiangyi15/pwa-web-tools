@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Angular Distribution Calculator - Compute I(θ,φ) = Σ|T|² from helicity amplitudes with Fourier expansion in φ.">
+  <meta name="description" content="Angular Distribution Calculator - Compute I(θ,φ) = Σ|T|² from helicity amplitudes with Fourier expansion in θ and φ.">
   <title>Angular Distribution Calculator | Partial Wave Analysis Tools</title>
   <link rel="stylesheet" href="../assets/css/style.css">
   <style>
@@ -190,7 +190,7 @@
       <div class="calc-header">
         <h1 class="calc-title">Angular Distribution Calculator</h1>
         <p class="calc-subtitle">
-          Compute I(θ,φ) = Σ|T|² from helicity amplitudes with Fourier expansion in φ
+          Compute I(θ,φ) = Σ|T|² from helicity amplitudes with Fourier expansion in θ and φ
         </p>
       </div>
 
@@ -285,12 +285,12 @@ where T is the helicity amplitude from the <strong>Angular Formula Calculator</s
 
 <b>Per-LS decomposition:</b>
 
-I<sub>(l,s)</sub>(θ,φ) = Σ<sub>m</sub> A<sub>m</sub>(θ) · cos(mφ) + B<sub>m</sub>(θ) · sin(mφ)
+I<sub>(l,s)</sub>(θ,φ) = Σ<sub>k</sub> A<sub>k</sub> · cos(k·θ/2) · cos(mφ) + B<sub>k</sub> · sin(k·θ/2) · sin(mφ)
 
-with A<sub>m</sub>(θ) expressed in sin<sup>p</sup>(θ/2)·cos<sup>q</sup>(θ/2) form.
+where each sin<sup>p</sup>(θ/2)·cos<sup>q</sup>(θ/2) factor from the Wigner-d expansion is converted to cos(k·θ/2), sin(k·θ/2) Fourier basis via half-angle identities.
 
-<b>Fourier expansion in φ:</b>
-Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/sin Fourier modes.
+<b>Fourier expansion in θ and φ:</b>
+Trigonometric product identities expand cos(k₁θ/2)·cos(k₂θ/2) and cos(m₁φ)·cos(m₂φ) etc. into single cos/sin Fourier modes. The final result has at most one cos/sin factor per angle variable per term.
               </div>
             </div>
           </div>
@@ -320,7 +320,9 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
   <script src="../assets/js/surd.js"></script>
   <script src="../assets/js/cg.js"></script>
   <script src="../assets/js/wigner-d.js"></script>
+  <script src="../assets/js/trig-poly.js"></script>
   <script src="../assets/js/get-angle.js"></script>
+  <script src="../assets/js/angular-expression.js"></script>
   <script>
     // Decay tree data structure
     var decayTree = {
@@ -695,7 +697,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
           for (var bi = 0; bi < batchTrees.length; bi++) {
             try {
               var showInterference = document.getElementById('show-interference').checked;
-              var result = computeAngularDistribution(batchTrees[bi].tree, { showInterference: showInterference });
+              var result = AngularExpression.compute(batchTrees[bi].tree, { showInterference: showInterference });
               if (result && !result.error) {
                 results.push({ label: batchTrees[bi].label, latexLabel: batchTrees[bi].latexLabel, result: result, error: null });
                 nOk++;
@@ -727,7 +729,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
                 if (lsKeys1.length === 0 || lsKeys2.length === 0) continue;
 
                 var crossPC = (ri.result.phiCombine && rj.result.phiCombine) ? ri.result.phiCombine : null;
-                var cross = computeCrossChainInterference(
+                var cross = AngularExpression.computeCrossChain(
                   ri.result.combinedRaw, lsKeys1,
                   rj.result.combinedRaw, lsKeys2,
                   crossPC
@@ -814,7 +816,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
             for (var li = 0; li < lsKeys.length; li++) {
               var lk = lsKeys[li];
               var fourier = r.result.lsMap[lk].fourier;
-              var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+              var latexExpr = AngularExpression.renderFourier(fourier, r.result.phiCombine);
               if (!latexExpr) latexExpr = '0';
               html += '<tr><td>(' + lk + ')</td><td><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div></td></tr>';
             }
@@ -835,7 +837,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
             for (var ii = 0; ii < ifKeys.length; ii++) {
               var ik = ifKeys[ii];
               var fourier = fourierMap[ik].fourier;
-              var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+              var latexExpr = AngularExpression.renderFourier(fourier, r.result.phiCombine);
               if (!latexExpr) latexExpr = '0';
               var pairLabel = ik.replace(/\u00d7/g, ') \u00d7 (');
               html += '<tr><td style="font-size:0.75rem;color:var(--text-muted);">(' + pairLabel + ')</td><td><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div></td></tr>';
@@ -859,44 +861,14 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
 
       // ── Global product-basis table (all unique Fourier keys) ──
       if (showBasis) {
-        // Determine a phiCombine for display: use first non-null from results
-        var basisPC = null;
-        for (var ri = 0; ri < results.length && !basisPC; ri++) {
-          if (results[ri].result && results[ri].result.phiCombine) basisPC = results[ri].result.phiCombine;
-        }
-
-        var productBasis = {};
-        for (var ri = 0; ri < results.length; ri++) {
-          var r = results[ri];
-          if (!r.result) continue;
-          var maps = [r.result.lsMap, r.result.interfMap, r.result.interfImagMap];
-          for (var mi = 0; mi < maps.length; mi++) {
-            var m = maps[mi];
-            if (!m) continue;
-            var mKeys = Object.keys(m);
-            for (var ki = 0; ki < mKeys.length; ki++) {
-              var fMap = m[mKeys[ki]].fourier;
-              var fKeys = Object.keys(fMap);
-              for (var fi = 0; fi < fKeys.length; fi++) {
-                var fk = fKeys[fi];
-                if (fk === '1') continue;
-                if (fMap[fk].isEmpty()) continue;
-                productBasis[fk] = true;
-              }
-            }
-          }
-        }
-
-        var basisKeys = Object.keys(productBasis).sort(function(a, b) {
-          if (a.length !== b.length) return a.length - b.length;
-          return a.localeCompare(b);
-        });
+        var basisKeys = AngularExpression.collectBasisKeys(results);
+        var basisPC = AngularExpression.findPhiCombine(results);
 
         if (basisKeys.length > 0) {
           html += '<div style="margin-top:1.5rem;">';
           html += '<table class="result-table"><thead><tr><th>#</th><th>Product basis function</th></tr></thead><tbody>';
           for (var bi = 0; bi < basisKeys.length; bi++) {
-            var tex = fourierKeyToLatex(basisKeys[bi], basisPC);
+            var tex = AngularExpression.fourierKeyToLatex(basisKeys[bi], basisPC);
             html += '<tr><td style="text-align:center;color:var(--text-muted);font-size:0.75rem;">' + (bi + 1) + '</td><td><span class="latex-cell" data-latex="' + escapeHtml(tex) + '"></span></td></tr>';
           }
           html += '</tbody></table></div>';
@@ -929,652 +901,20 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
       document.getElementById('download-latex-btn').style.display = 'none';
     }
 
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // ANGULAR DISTRIBUTION |T|² COMPUTATION
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    function computeAngularDistribution(tree, options) {
-      if (!tree.children) return { error: 'Root must decay.' };
-
-      var vertices = getVertices(tree);
-      var nDecays = vertices.length;
-
-      // Detect J=0 root decay: both child phi terms share the same exponent,
-      // so we can fix φ₁=0 and rename φ₂→χ (one fewer azimuthal variable).
-      var phiCombine = null;
-      if (nDecays >= 3 &&
-          toSpin(vertices[0].Ja).value === 0 &&
-          tree.children && tree.children[0] && tree.children[1] &&
-          tree.children[0].children && tree.children[1].children) {
-        var c0size = countDecayVertices(tree.children[0]);
-        phiCombine = { fixIdx: 1, chiIdx: 1 + c0size };
-      }
-
-      // Build structured vertex terms
-      var thetaIdx = 0, phiIdx = 0;
-      var vertexTerms = [];
-      for (var vi = 0; vi < vertices.length; vi++) {
-        vertexTerms.push(_buildVertexStructTerms(vertices[vi], thetaIdx, phiIdx));
-        thetaIdx++;
-        phiIdx++;
-      }
-
-      // Combine across cascade
-      var combined = _combineStructured(vertexTerms, tree, 0);
-
-      // Collect all helicity keys and LS keys
-      var allHK = Object.keys(combined);
-      if (allHK.length === 0) return { error: 'No valid helicity combinations.' };
-
-      var allLS = {};
-      for (var hi = 0; hi < allHK.length; hi++) {
-        var lsKeys = Object.keys(combined[allHK[hi]]);
-        for (var li = 0; li < lsKeys.length; li++) {
-          allLS[lsKeys[li]] = true;
-        }
-      }
-      var lsKeyList = Object.keys(allLS).sort();
-
-      // For each LS key, accumulate |T|² contributions from all helicities
-      var lsMap = {};
-      for (var li = 0; li < lsKeyList.length; li++) {
-        lsMap[lsKeyList[li]] = { fourier: {} };
-      }
-
-      for (var hi = 0; hi < allHK.length; hi++) {
-        var hk = allHK[hi];
-        var lsDict = combined[hk];
-
-        for (var li = 0; li < lsKeyList.length; li++) {
-          var lk = lsKeyList[li];
-          var terms = lsDict[lk];
-          if (!terms) continue;
-
-          // Expand terms for distribution
-          var tSums = expandTermsForDistribution(terms);
-
-          // |T|² = sum over term pairs with matching im flags
-          var pairTerms = crossMultiplyTerms(tSums);
-
-          // Accumulate into LS distribution
-          for (var pi = 0; pi < pairTerms.length; pi++) {
-            addTermToFourier(lsMap[lk].fourier, pairTerms[pi], phiCombine);
-          }
-        }
-      }
-
-      // ── Interference terms 2 Re[T_{ls1} T_{ls2}*] and 2 Im[T_{ls1} T_{ls2}*] ──
-      var showInterference = options && options.showInterference;
-      var interfMap = {};
-      var interfImagMap = {};
-
-      if (showInterference && lsKeyList.length >= 2) {
-        // Initialize interference maps for each LS pair
-        for (var li1 = 0; li1 < lsKeyList.length; li1++) {
-          for (var li2 = li1 + 1; li2 < lsKeyList.length; li2++) {
-            var key = lsKeyList[li1] + '\u00d7' + lsKeyList[li2];
-            interfMap[key] = { fourier: {} };
-            interfImagMap[key] = { fourier: {} };
-          }
-        }
-
-        // Cross helicity contributions between LS pairs
-        for (var hi = 0; hi < allHK.length; hi++) {
-          var hk = allHK[hi];
-          var lsDict = combined[hk];
-
-          for (var li1 = 0; li1 < lsKeyList.length; li1++) {
-            var lk1 = lsKeyList[li1];
-            var terms1 = lsDict[lk1];
-            if (!terms1 || terms1.length === 0) continue;
-
-            for (var li2 = li1 + 1; li2 < lsKeyList.length; li2++) {
-              var lk2 = lsKeyList[li2];
-              var terms2 = lsDict[lk2];
-              if (!terms2 || terms2.length === 0) continue;
-
-              var tSums1 = expandTermsForDistribution(terms1);
-              var tSums2 = expandTermsForDistribution(terms2);
-
-              // 2 Re[T1 T2*] = 2·(Re1·Re2 + Im1·Im2)
-              var pairTerms = crossMultiplyTermsBetween(tSums1, tSums2);
-              var pairKey = lk1 + '\u00d7' + lk2;
-              for (var pi = 0; pi < pairTerms.length; pi++) {
-                addTermToFourier(interfMap[pairKey].fourier, pairTerms[pi], phiCombine);
-              }
-
-              // 2 Im[T1 T2*] = 2·(Im1·Re2 − Re1·Im2)
-              var imagPairs = crossMultiplyTermsBetweenImag(tSums1, tSums2);
-              for (var pi = 0; pi < imagPairs.length; pi++) {
-                addTermToFourier(interfImagMap[pairKey].fourier, imagPairs[pi], phiCombine);
-              }
-            }
-          }
-        }
-      }
-
-      return { lsMap: lsMap, nDecays: nDecays, phiCombine: phiCombine, interfMap: interfMap, interfImagMap: interfImagMap, combinedRaw: combined, lsKeyList: lsKeyList };
-    }
-
-    // ── Cross-chain interference (batch mode: different spin combos) ──
-    // Takes raw combined data and LS lists from two trees and computes
-    // 2 Re[T_{chain1,ls1} T_{chain2,ls2}*] and 2 Im[T_{chain1,ls1} T_{chain2,ls2}*]
-    // across all helicity × helicity pairs.
-    function computeCrossChainInterference(combined1, lsKeys1, combined2, lsKeys2, phiCombine) {
-      var hk1List = Object.keys(combined1);
-      var hk2List = Object.keys(combined2);
-
-      var interfMap = {};
-      var interfImagMap = {};
-      for (var i1 = 0; i1 < lsKeys1.length; i1++) {
-        for (var i2 = 0; i2 < lsKeys2.length; i2++) {
-          var key = lsKeys1[i1] + '\u00d7' + lsKeys2[i2];
-          interfMap[key] = { fourier: {} };
-          interfImagMap[key] = { fourier: {} };
-        }
-      }
-
-      for (var h1 = 0; h1 < hk1List.length; h1++) {
-        var lsDict1 = combined1[hk1List[h1]];
-        for (var h2 = 0; h2 < hk2List.length; h2++) {
-          var lsDict2 = combined2[hk2List[h2]];
-
-          for (var i1 = 0; i1 < lsKeys1.length; i1++) {
-            var lk1 = lsKeys1[i1];
-            var terms1 = lsDict1[lk1];
-            if (!terms1 || terms1.length === 0) continue;
-
-            for (var i2 = 0; i2 < lsKeys2.length; i2++) {
-              var lk2 = lsKeys2[i2];
-              var terms2 = lsDict2[lk2];
-              if (!terms2 || terms2.length === 0) continue;
-
-              var tSums1 = expandTermsForDistribution(terms1);
-              var tSums2 = expandTermsForDistribution(terms2);
-
-              var pairKey = lk1 + '\u00d7' + lk2;
-
-              // 2 Re[T1 T2*]
-              var pairTerms = crossMultiplyTermsBetween(tSums1, tSums2);
-              for (var pi = 0; pi < pairTerms.length; pi++) {
-                addTermToFourier(interfMap[pairKey].fourier, pairTerms[pi], phiCombine);
-              }
-
-              // 2 Im[T1 T2*]
-              var imagPairs = crossMultiplyTermsBetweenImag(tSums1, tSums2);
-              for (var pi = 0; pi < imagPairs.length; pi++) {
-                addTermToFourier(interfImagMap[pairKey].fourier, imagPairs[pi], phiCombine);
-              }
-            }
-          }
-        }
-      }
-
-      return { interfMap: interfMap, interfImagMap: interfImagMap };
-    }
-
-    function expandTermsForDistribution(terms) {
-      var result = [];
-      for (var i = 0; i < terms.length; i++) {
-        var t = terms[i];
-        var tbatch = _collectTheta(t);
-        var pbatch = _collectPhi(t);
-
-        var coeffSurd;
-        try { coeffSurd = Surd.parse(t.s); } catch(e) { coeffSurd = new Surd(1, 0, 1, 1); }
-
-        result.push({
-          thetaBatch: tbatch,
-          phiBatch: pbatch,
-          coeff: coeffSurd,
-          im: !!t.im
-        });
-      }
-      return result;
-    }
-
-    function crossMultiplyTerms(ts) {
-      var realTerms = [], imagTerms = [];
-      for (var i = 0; i < ts.length; i++) {
-        if (ts[i].im) imagTerms.push(ts[i]);
-        else realTerms.push(ts[i]);
-      }
-
-      var pairs = [];
-      // real × real
-      for (var i = 0; i < realTerms.length; i++) {
-        for (var j = 0; j < realTerms.length; j++) {
-          var p = multiplyTermPair(realTerms[i], realTerms[j]);
-          if (p) pairs.push(p);
-        }
-      }
-      // imag × imag
-      for (var i = 0; i < imagTerms.length; i++) {
-        for (var j = 0; j < imagTerms.length; j++) {
-          var p = multiplyTermPair(imagTerms[i], imagTerms[j]);
-          if (p) pairs.push(p);
-        }
-      }
-      return pairs;
-    }
-
-    function crossMultiplyTermsBetween(ts1, ts2) {
-      var real1 = [], imag1 = [];
-      var real2 = [], imag2 = [];
-      for (var i = 0; i < ts1.length; i++) {
-        if (ts1[i].im) imag1.push(ts1[i]);
-        else real1.push(ts1[i]);
-      }
-      for (var i = 0; i < ts2.length; i++) {
-        if (ts2[i].im) imag2.push(ts2[i]);
-        else real2.push(ts2[i]);
-      }
-
-      var pairs = [];
-      // real1 × real2
-      for (var i = 0; i < real1.length; i++) {
-        for (var j = 0; j < real2.length; j++) {
-          var p = multiplyTermPair(real1[i], real2[j]);
-          if (p) pairs.push(p);
-        }
-      }
-      // imag1 × imag2
-      for (var i = 0; i < imag1.length; i++) {
-        for (var j = 0; j < imag2.length; j++) {
-          var p = multiplyTermPair(imag1[i], imag2[j]);
-          if (p) pairs.push(p);
-        }
-      }
-      // Multiply coefficient by 2 (the 2 Re[...] factor)
-      var two = new Surd(2, 1, 1, 1);
-      for (var i = 0; i < pairs.length; i++) {
-        pairs[i].coeff = Surd.mul(pairs[i].coeff, two);
-      }
-      return pairs;
-    }
-
-    // Cross multiply for 2·Im[T1 T2*] = 2·(Im1·Re2 − Re1·Im2)
-    // Uses the im-blind pair multiplier so we can mix real & imag terms
-    function crossMultiplyTermsBetweenImag(ts1, ts2) {
-      var pairs = [];
-      for (var i = 0; i < ts1.length; i++) {
-        for (var j = 0; j < ts2.length; j++) {
-          var sign = 0;
-          if (ts1[i].im && !ts2[j].im) sign = 1;   // Im1·Re2 → +1
-          if (!ts1[i].im && ts2[j].im) sign = -1;   // Re1·Im2 → −1
-          if (sign === 0) continue;
-          var p = multiplyTermPairCross(ts1[i], ts2[j]);
-          if (p) {
-            if (sign === -1) p.coeff = Surd.mul(p.coeff, new Surd(-1, 1, 1, 1));
-            pairs.push(p);
-          }
-        }
-      }
-      // Multiply coefficient by 2 (the 2·Im[...] factor)
-      var two = new Surd(2, 1, 1, 1);
-      for (var i = 0; i < pairs.length; i++) {
-        pairs[i].coeff = Surd.mul(pairs[i].coeff, two);
-      }
-      return pairs;
-    }
-
-    // Term pair multiplier without the im-flag gate (needed for cross real/imag multiplication)
-    function multiplyTermPairCross(a, b) {
-      var coeff = Surd.mul(a.coeff, b.coeff);
-      var thetaBatch = mergeThetaBatches(a.thetaBatch, b.thetaBatch);
-      return {
-        thetaBatch: thetaBatch,
-        phiBatches: [a.phiBatch, b.phiBatch],
-        coeff: coeff,
-      };
-    }
-
-    function multiplyTermPair(a, b) {
-      if (a.im !== b.im) return null;
-      var coeff = Surd.mul(a.coeff, b.coeff);
-      var thetaBatch = mergeThetaBatches(a.thetaBatch, b.thetaBatch);
-      return {
-        thetaBatch: thetaBatch,
-        phiBatches: [a.phiBatch, b.phiBatch],
-        coeff: coeff,
-      };
-    }
-
-    function mergeThetaBatches(a, b) {
-      var result = [];
-      var map = {};
-      for (var i = 0; i < a.length; i++) {
-        var key = a[i].idx;
-        map[key] = { idx: a[i].idx, sp: a[i].sp || 0, cp: a[i].cp || 0 };
-      }
-      for (var i = 0; i < b.length; i++) {
-        var key = b[i].idx;
-        if (map[key]) {
-          map[key].sp += b[i].sp || 0;
-          map[key].cp += b[i].cp || 0;
-        } else {
-          map[key] = { idx: b[i].idx, sp: b[i].sp || 0, cp: b[i].cp || 0 };
-        }
-      }
-      for (var k in map) result.push(map[k]);
-      return result;
-    }
-
-    function mergePhiBatches(a, b) {
-      return (a || []).concat(b || []);
-    }
-
-    function expandPhiProduct(pf1, pm1, pf2, pm2) {
-      if (pf1 === '1') return [{ pf: pf2, pm: pm2 || 0, factor: '1' }];
-      if (pf2 === '1') return [{ pf: pf1, pm: pm1 || 0, factor: '1' }];
-
-      if (pf1 === 'cos' && pf2 === 'cos') {
-        return [
-          { pf: 'cos', pm: (pm1||0) + (pm2||0), factor: '1/2' },
-          { pf: 'cos', pm: Math.abs((pm1||0) - (pm2||0)), factor: '1/2' }
-        ];
-      }
-      if (pf1 === 'sin' && pf2 === 'sin') {
-        return [
-          { pf: 'cos', pm: Math.abs((pm1||0) - (pm2||0)), factor: '1/2' },
-          { pf: 'cos', pm: (pm1||0) + (pm2||0), factor: '-1/2' }
-        ];
-      }
-      if (pf1 === 'cos' && pf2 === 'sin') {
-        return [
-          { pf: 'sin', pm: (pm1||0) + (pm2||0), factor: '1/2' },
-          { pf: 'sin', pm: Math.abs((pm1||0) - (pm2||0)), factor: '-1/2' }
-        ];
-      }
-      if (pf1 === 'sin' && pf2 === 'cos') {
-        return [
-          { pf: 'sin', pm: (pm1||0) + (pm2||0), factor: '1/2' },
-          { pf: 'sin', pm: Math.abs((pm1||0) - (pm2||0)), factor: '1/2' }
-        ];
-      }
-      return [];
-    }
-
-    function addTermToFourier(fourierMap, pair, phiCombine) {
-      if (!pair) return;
-      var coeff = pair.coeff;
-      var thetaBatch = pair.thetaBatch;
-      var phiBatches = pair.phiBatches || [[], []];
-
-      // ── Expand θ: sin^p(θ_i/2)·cos^q(θ_i/2) → Fourier basis cos(kθ_i/2), sin(kθ_i/2) ──
-      // Uses expandHalfAngleBasis (same as Angular Formula Calculator).
-      var thetaExpansions = [{ terms: [], factorSurd: new Surd(1, 1, 1, 1) }];
-      for (var ti = 0; ti < thetaBatch.length; ti++) {
-        var tt = thetaBatch[ti];
-        var halfExp = expandHalfAngleBasis(tt.sp, tt.cp);
-        if (halfExp.length === 0) continue;
-        var newList = [];
-        for (var ei = 0; ei < thetaExpansions.length; ei++) {
-          for (var hi = 0; hi < halfExp.length; hi++) {
-            var he = halfExp[hi];
-            if (he.s === '0') continue;
-            var terms = thetaExpansions[ei].terms.slice();
-            if (he.func !== '1') {
-              terms.push({ idx: tt.idx, func: he.func, k: he.k });
-            }
-            var f = Surd.mul(thetaExpansions[ei].factorSurd, Surd.parse(he.s));
-            if (!f.isZero()) {
-              newList.push({ terms: terms, factorSurd: f });
-            }
-          }
-        }
-        thetaExpansions = newList;
-      }
-
-      // ── Expand φ: cos/sin product → sum of cos/sin using trig identities ──
-      var allPhi = (phiBatches[0] || []).concat(phiBatches[1] || []);
-
-      // J=0 optimization: fix φ_fixIdx = 0, φ_chiIdx → χ (independent variable)
-      //   sin(l·0) = 0 → term vanishes; cos(l·0) = 1 → factor drops
-      //   χ is displayed later as φ_fixIdx + φ_chiIdx
-      if (phiCombine) {
-        var filtered = [];
-        for (var i = 0; i < allPhi.length; i++) {
-          if (allPhi[i].idx === phiCombine.fixIdx) {
-            if (allPhi[i].pf === 'sin') return; // sin(0)=0 → whole term zero
-            continue; // cos(0)=1 → drop the factor
-          }
-          if (allPhi[i].idx === phiCombine.chiIdx) {
-            allPhi[i].idx = -allPhi[i].idx; // negate → marks this as χ variable
-          }
-          filtered.push(allPhi[i]);
-        }
-        allPhi = filtered;
-      }
-      var phiByIdx = {};
-      for (var i = 0; i < allPhi.length; i++) {
-        var idx = allPhi[i].idx;
-        if (!phiByIdx[idx]) phiByIdx[idx] = [];
-        phiByIdx[idx].push(allPhi[i]);
-      }
-
-      var phiExpansions = [{ terms: [], factorSurd: new Surd(1, 1, 1, 1) }];
-      var idxKeys = Object.keys(phiByIdx).sort(function(a, b) { return parseInt(a) - parseInt(b); });
-      for (var ki = 0; ki < idxKeys.length; ki++) {
-        var idx = idxKeys[ki];
-        var phis = phiByIdx[idx];
-
-        var product = [{ pf: '1', pm: 0, factorSurd: new Surd(1, 1, 1, 1) }];
-        for (var pi = 0; pi < phis.length; pi++) {
-          var newProduct = [];
-          for (var ppi = 0; ppi < product.length; ppi++) {
-            var expanded = expandPhiProduct(
-              product[ppi].pf, product[ppi].pm,
-              phis[pi].pf, phis[pi].pm || 0
-            );
-            for (var ei = 0; ei < expanded.length; ei++) {
-              var f = Surd.mul(product[ppi].factorSurd, parseFractionSurd(expanded[ei].factor));
-              if (!f.isZero()) {
-                newProduct.push({ pf: expanded[ei].pf, pm: expanded[ei].pm, factorSurd: f });
-              }
-            }
-          }
-          product = newProduct;
-        }
-
-        var newExpanded = [];
-        for (var ei = 0; ei < phiExpansions.length; ei++) {
-          for (var pj = 0; pj < product.length; pj++) {
-            var terms = phiExpansions[ei].terms.slice();
-            terms.push({ idx: parseInt(idx), pf: product[pj].pf, pm: product[pj].pm });
-            var f = Surd.mul(phiExpansions[ei].factorSurd, product[pj].factorSurd);
-            if (!f.isZero()) {
-              newExpanded.push({ terms: terms, factorSurd: f });
-            }
-          }
-        }
-        phiExpansions = newExpanded;
-      }
-
-      if (phiExpansions.length === 0) {
-        phiExpansions = [{ terms: [], factorSurd: new Surd(1, 1, 1, 1) }];
-      }
-
-      // ── Combine θ × φ Fourier modes ──
-      for (var tei = 0; tei < thetaExpansions.length; tei++) {
-        for (var pei = 0; pei < phiExpansions.length; pei++) {
-          var tExp = thetaExpansions[tei];
-          var pExp = phiExpansions[pei];
-
-          var totalCoeff = Surd.mul(coeff, Surd.mul(tExp.factorSurd, pExp.factorSurd));
-          if (totalCoeff.isZero()) continue;
-
-          var key = buildCombinedKey(tExp.terms, pExp.terms);
-          if (!key) continue;
-
-          if (!fourierMap[key]) fourierMap[key] = new SurdSum();
-          fourierMap[key].add(totalCoeff);
-        }
-      }
-    }
-
-    function buildCombinedKey(thetaTerms, phiTerms) {
-      var thetaParts = [], phiParts = [];
-      var allEmpty = true;
-
-      for (var i = 0; i < thetaTerms.length; i++) {
-        var t = thetaTerms[i];
-        if (t.k === 0) {
-          if (t.func === 'sin') return null;
-          continue;
-        }
-        allEmpty = false;
-        thetaParts.push(t.idx + ':' + t.func + '|' + t.k);
-      }
-
-      for (var i = 0; i < phiTerms.length; i++) {
-        var p = phiTerms[i];
-        if (p.pf === '1') continue;
-        if (p.pm === 0) {
-          if (p.pf === 'sin') return null;
-          continue;
-        }
-        allEmpty = false;
-        phiParts.push(p.idx + ':' + p.pf + '|' + p.pm);
-      }
-
-      if (allEmpty) return '1';
-
-      var key = '';
-      if (thetaParts.length > 0) key += 't:' + thetaParts.join(',');
-      if (thetaParts.length > 0 && phiParts.length > 0) key += '||';
-      if (phiParts.length > 0) key += 'p:' + phiParts.join(',');
-      return key;
-    }
-
-    function parseFractionSurd(s) {
-      try { return Surd.parse(s); } catch(e) { return new Surd(1, 1, 1, 1); }
-    }
-
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // DISPLAY HELPERS
-    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    function renderFourierToString(fourierMap, phiCombine) {
-      var keys = Object.keys(fourierMap).sort(function(a, b) {
-        return sortFourierKey(a) - sortFourierKey(b);
-      });
-
-      if (keys.length === 0) return '';
-
-      var lines = '';
-      var first = true;
-      for (var ki = 0; ki < keys.length; ki++) {
-        var key = keys[ki];
-        var sum = fourierMap[key];
-        if (sum.isEmpty()) continue;
-
-        var sumStr = sum.toLatex();
-        if (sumStr === '0') continue;
-
-        var fourierStr = fourierKeyToLatex(key, phiCombine);
-
-        if (!first) {
-          if (sumStr.charAt(0) === '-') {
-            lines += ' \\!-\\! ';
-            sumStr = sumStr.substring(1);
-          } else {
-            lines += ' \\!+\\! ';
-          }
-        }
-        lines += sumStr;
-        if (fourierStr) lines += '\\,' + fourierStr;
-        first = false;
-      }
-
-      return lines;
-    }
-
-    function sortFourierKey(key) {
-      if (key === '1') return 0;
-      var maxOrder = 0;
-      // θ part (before ||), φ part (after ||)
-      var tPart = key.indexOf('||') >= 0 ? key.substring(0, key.indexOf('||')) : key;
-      var pPart = key.indexOf('||') >= 0 ? key.substring(key.indexOf('||') + 2) : '';
-      // Also handle standalone p: keys
-      if (pPart === '' && key.indexOf('p:') === 0) pPart = key;
-      var re = /:\w+\|(\d+)/g;
-      var m;
-      while ((m = re.exec(tPart)) !== null) maxOrder = Math.max(maxOrder, parseInt(m[1]));
-      while ((m = re.exec(pPart)) !== null) maxOrder = Math.max(maxOrder, parseInt(m[1]));
-      return maxOrder || 0;
-    }
-
-    function fourierKeyToLatex(key, phiCombine) {
-      if (key === '1' || key === '') return '';
-
-      var tPart = '', pPart = '';
-      var sep = key.indexOf('||');
-      if (sep >= 0) {
-        tPart = key.substring(0, sep);
-        pPart = key.substring(sep + 2);
-      } else if (key.indexOf('t:') === 0) {
-        tPart = key;
-      } else if (key.indexOf('p:') === 0) {
-        pPart = key;
-      }
-
-      var terms = [];
-
-      // Parse θ part (t:0:cos|1,1:sin|3)
-      if (tPart) {
-        var entries = tPart.indexOf(':') >= 0 ? tPart.substring(tPart.indexOf(':') + 1).split(',') : [];
-        for (var i = 0; i < entries.length; i++) {
-          var m = entries[i].match(/(-?\d+):(\w+)\|(\d+)/);
-          if (m) {
-            var idx = parseInt(m[1]);
-            var func = m[2];
-            var k = parseInt(m[3]);
-            var thetaName = '\\theta_{' + idx + '}';
-            var arg;
-            if (k === 1) {
-              arg = '\\frac{' + thetaName + '}{2}';
-            } else if (k % 2 === 0) {
-              var n = k / 2;
-              arg = (n === 1 ? '' : n) + thetaName;
-            } else {
-              arg = '\\frac{' + k + '}{2}' + thetaName;
-            }
-            terms.push('\\' + func + '(' + arg + ')');
-          }
-        }
-      }
-
-      // Parse φ part (p:0:cos|2,1:sin|1)
-      if (pPart) {
-        var entries2 = pPart.indexOf(':') >= 0 ? pPart.substring(pPart.indexOf(':') + 1).split(',') : [];
-        for (var i = 0; i < entries2.length; i++) {
-          var m = entries2[i].match(/(-?\d+):(\w+)\|(\d+)/);
-          if (m) {
-            var idx = parseInt(m[1]);
-            var pf = m[2];
-            var pm = parseInt(m[3]);
-            var phiName;
-            // J=0 optimization: negative idx → χ variable → display as φ_fixIdx + φ_chiIdx
-            if (phiCombine && idx < 0) {
-              phiName = '\\phi_{' + phiCombine.fixIdx + '}+\\phi_{' + Math.abs(idx) + '}';
-              if (pm !== 1) phiName = '(' + phiName + ')';
-            } else {
-              phiName = '\\phi_{' + idx + '}';
-            }
-            var arg = (pm === 1 ? '' : pm) + phiName;
-            terms.push('\\' + pf + '(' + arg + ')');
-          }
-        }
-      }
-
-      return terms.join('\\,');
-    }
+    // ── All computation moved to assets/js/angular-expression.js ──
+    // Public API: AngularExpression.compute(), .computeCrossChain(),
+    //   .renderFourier(), .fourierKeyToLatex(), .collectBasisKeys(), .findPhiCombine()
+
+    // ── All computation moved to assets/js/angular-expression.js ──
+    // Public API: AngularExpression.compute(), .computeCrossChain(),
+    //   .renderFourier(), .fourierKeyToLatex(), .collectBasisKeys(), .findPhiCombine()
 
     function escapeHtml(s) {
       return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    // ===================================================================
+    // LATEX DOCUMENT GENERATION & DOWNLOAD
     // ===================================================================
     // LATEX DOCUMENT GENERATION & DOWNLOAD
     // ===================================================================
@@ -1607,7 +947,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
         for (var li = 0; li < lsKeys.length; li++) {
           var lk = lsKeys[li];
           var fourier = r.result.lsMap[lk].fourier;
-          var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+          var latexExpr = AngularExpression.renderFourier(fourier, r.result.phiCombine);
           if (!latexExpr || latexExpr === '') latexExpr = '= 0';
 
           var lsLabel = lk.replace(/,/g, ',\\;');
@@ -1623,7 +963,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
           for (var ii = 0; ii < ifKeys.length; ii++) {
             var ik = ifKeys[ii];
             var fourier = r.result.interfMap[ik].fourier;
-            var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+            var latexExpr = AngularExpression.renderFourier(fourier, r.result.phiCombine);
             if (!latexExpr || latexExpr === '') latexExpr = '= 0';
             var pairLabel = ik.replace('\u00d7', '\\;\\times\\;');
             lines.push('\\begin{align*}');
@@ -1639,7 +979,7 @@ Trigonometric product identities expand cos(aφ)·cos(bφ) etc. into single cos/
           for (var ii = 0; ii < ifKeys.length; ii++) {
             var ik = ifKeys[ii];
             var fourier = r.result.interfImagMap[ik].fourier;
-            var latexExpr = renderFourierToString(fourier, r.result.phiCombine);
+            var latexExpr = AngularExpression.renderFourier(fourier, r.result.phiCombine);
             if (!latexExpr || latexExpr === '') latexExpr = '= 0';
             var pairLabel = ik.replace('\u00d7', '\\;\\times\\;');
             lines.push('\\begin{align*}');
