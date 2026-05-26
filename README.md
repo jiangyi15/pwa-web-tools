@@ -77,6 +77,20 @@ All calculators use a custom `Surd` arithmetic library for exact symbolic comput
 - CG coefficients computed via the Racah formula using exact integer factorials
 - Wigner d-matrix elements computed via half-angle Fourier expansion with exact binomial coefficients
 
+### Angular Projection Normalization
+
+The **Angular Projection** tool computes 1D projections of the angular distribution I(θ,φ) = |T|² onto each individual angle variable (θ or φ). The projection is the marginal distribution:
+
+- **θ projection** at cos θ: I(cos θ) = ∫ I(θ, φ) dφ (integrated over φ, plotted vs cos θ)
+- **φ projection** at φ: I(φ) = ∫ I(θ, φ) d(cos θ) (integrated over cos θ, plotted vs φ)
+
+The projections are normalized to the total angular measure 2^N_θ × (2π)^N_φ, so that a flat |T|² = 1 gives:
+
+- I(cos θ) = 1/2  (cos θ range = 2, so |T|² / range = 1/2)
+- I(φ) = 1/(2π)  (φ range = 2π, so |T|² / range = 1/(2π))
+
+This normalization ensures the projection shows the average density per unit of the projection variable for a uniform distribution.
+
 ### Helicity Amplitude Pipeline
 
 The Angular Formula calculator combines:

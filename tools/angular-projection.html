@@ -183,6 +183,16 @@
     .proj-card-body {
       padding: 0.75rem;
     }
+    .latex-scroll-wrap {
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+    .latex-cell {
+      display: inline-block;
+      white-space: nowrap;
+    }
     .proj-expr {
       text-align: center;
       padding: 0.5rem;
@@ -190,6 +200,7 @@
       min-height: 2rem;
       color: var(--accent);
       font-size: 0.95rem;
+      min-width: 0;
     }
     .proj-expr-cos {
       text-align: center;
@@ -199,6 +210,7 @@
       color: var(--accent-dim);
       font-size: 0.85rem;
       font-style: italic;
+      min-width: 0;
     }
     .proj-plot-wrap {
       width: 100%;
@@ -288,7 +300,7 @@
           </div>
         </div>
 
-        <div>
+        <div style="min-width:0">
           <!-- Results Panel -->
           <div class="results-panel" id="results-panel">
             <div class="results-header">
@@ -827,6 +839,27 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
     }
 
     /**
+     * Extract the rational value of a SurdSum (all terms must have r=1, no sqrt).
+     * Returns { n: num, d: den } or null if terms have sqrt roots.
+     */
+    function _surSumToRational(sum) {
+      if (sum.isEmpty()) return null;
+      var num = 0, den = 1;
+      var terms = sum.terms();
+      for (var i = 0; i < terms.length; i++) {
+        var t = terms[i];
+        if (t.r !== 1) return null;  // has sqrt, can't use rational
+        var tn = t.s * t.p;
+        var td = t.q;
+        num = num * td + tn * den;
+        den = den * td;
+        var g = _gcd(Math.abs(num), den);
+        num /= g; den /= g;
+      }
+      return { n: num, d: den };
+    }
+
+    /**
      * Convert a Surd to a floating-point number.
      */
     function _surdFloat(s) {
@@ -865,23 +898,6 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
     }
 
     /**
-     * Compute the product of (2J+1) across all decay vertices.
-     * @param {Object} node - A decay tree node with { j, children }
-     * @return {number} The product of (2*J_i+1) for each vertex's mother spin.
-     */
-    function _computeSpinProduct(node) {
-      if (!node) return 1;
-      var product = 1;
-      if (node.children) {
-        product *= (2 * node.j + 1);
-        for (var i = 0; i < node.children.length; i++) {
-          product *= _computeSpinProduct(node.children[i]);
-        }
-      }
-      return product;
-    }
-
-    /**
      * Compute 1D projections of a Fourier map onto each variable.
      *
      * @param {Object} fourierMap  { key: SurdSum } from AngularExpression
@@ -890,17 +906,45 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
      * @return {Object}  { varName: { 0: {key: SurdSum}, 1: {key: SurdSum}, ... } }
      *   where the outer group key is the π exponent.
      */
-    function computeProjections(fourierMap, nDecays, phiCombine, decayTree) {
-      var allVars = _allVarNames(nDecays, phiCombine);
-      var N = allVars.length;
-      var spinProduct = _computeSpinProduct(decayTree || { j: 0, children: null });
-      // Count θ and φ/χ variables for per-type normalization
-      var N_phi = 0, N_theta = 0;
-      for (var i = 0; i < allVars.length; i++) {
-        if (_isThetaVar(allVars[i])) N_theta++;
-        else N_phi++;
+    /**
+     * Compute the total integral of |T|² over all angles: ∫ I(θ,φ) dΩ.
+     * This gives the overall scale factor that changes with helicity filters.
+     * Returns { piExp: SurdSum } — e.g. { 1: SurdSum(4) } = 4π.
+     */
+    function computeTotalIntegral(fourierMap, allVars) {
+      var groups = {};
+      for (var key in fourierMap) {
+        var sum = fourierMap[key];
+        if (sum.isEmpty()) continue;
+        var factors = _parseFourierKey(key);
+        var totalInt = {n: 1, d: 1, pi: 0};
+        var kill = false;
+        for (var avi = 0; avi < allVars.length; avi++) {
+          var av = allVars[avi];
+          var found = false;
+          for (var fi = 0; fi < factors.length; fi++) {
+            if (factors[fi].name === av) {
+              var intF = _integralFactor(av, factors[fi].func, factors[fi].k);
+              if (intF.n === 0) { kill = true; break; }
+              totalInt = _mulIntFactors(totalInt, intF);
+              found = true; break;
+            }
+          }
+          if (kill) break;
+          if (!found) totalInt = _mulIntFactors(totalInt, _emptyIntegral(av));
+        }
+        if (kill || totalInt.n === 0) continue;
+        var scaled = _surSumScale(sum, totalInt.n, totalInt.d);
+        if (scaled.isEmpty()) continue;
+        var piExp = totalInt.pi;
+        if (!groups[piExp]) groups[piExp] = new SurdSum();
+        _surSumAdd(groups[piExp], scaled);
       }
-      var normDen = Math.pow(2, N);  // 2^{N_theta+N_phi}
+      return groups;
+    }
+
+    function computeProjections(fourierMap, nDecays, phiCombine) {
+      var allVars = _allVarNames(nDecays, phiCombine);
       var results = {};
 
       for (var vi = 0; vi < allVars.length; vi++) {
@@ -946,16 +990,9 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
 
           if (totalInt.n === 0) continue;
 
-          // ── Apply normalization: ∏(2J_i+1) / (2^N_θ × (2π)^N_φ)
-          //    This gives I_proj(cos θ) = 1/2 and I_proj(φ) = 1/(2π) for flat I = 1.
-          totalInt.n *= spinProduct;
-          totalInt.d *= normDen;  // 2^N
-          totalInt.pi = (totalInt.pi || 0) - N_phi;
-          var rg = _gcd(Math.abs(totalInt.n), totalInt.d);
-          totalInt.n /= rg;
-          totalInt.d /= rg;
-
-          // The contribution to the projection: scale SurdSum by totalInt.n/totalInt.d
+          // Scale SurdSum by totalInt.n/totalInt.d (integral over other variables)
+          // No further normalization — the projection is the actual marginal I(x) = ∫ I(x,others) d(others),
+          // so ∫ I_proj(x) dx over the full variable range equals the total integral.
           var piExp = totalInt.pi;
           if (!groups[piExp]) groups[piExp] = {};
 
@@ -1332,6 +1369,36 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
      * Render a single π-grouped projection showing the constant term prominently.
      * Uses half-angle Fourier basis.
      */
+    /**
+     * Render the total integral groups as a LaTeX factor.
+     * Groups is { piExp: SurdSum }, e.g. { 1: SurdSum(4/3) } = 4π/3.
+     * Returns e.g. '\\frac{4}{3}\\pi\\times ' or '' if trivial.
+     */
+    function _renderTotalInt(groups) {
+      if (!groups || Object.keys(groups).length === 0) return '';
+      var parts = [];
+      var exps = Object.keys(groups).map(Number).sort(function(a,b){return b-a;});
+      for (var ei = 0; ei < exps.length; ei++) {
+        var p = exps[ei];
+        var sum = groups[p];
+        if (sum.isEmpty()) continue;
+        var c = sum.toLatex();
+        if (c === '0') continue;
+        if (c === '1') {
+          if (p === 0) parts.push('1');
+          else if (p === 1) parts.push('\\pi');
+          else parts.push('\\pi^{' + p + '}');
+        } else {
+          if (p === 0) parts.push(c);
+          else if (p === 1) parts.push(c + '\\pi');
+          else parts.push(c + '\\pi^{' + p + '}');
+        }
+      }
+      if (parts.length === 0) return '';
+      var joined = parts.join('+').replace(/\+-/g, '-');
+      return (parts.length > 1 ? '\\big(' : '') + joined + (parts.length > 1 ? '\\big)' : '') + '\\times ';
+    }
+
     function renderProjectionLatex(groups, varName, phiCombine) {
       if (!groups || Object.keys(groups).length === 0) return '= 0';
       return _renderProjGroups(groups, varName, phiCombine);
@@ -1439,15 +1506,10 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
         if (y > yMax) yMax = y;
       }
 
-      // Handle edge case: all same y
-      if (yMax - yMin < 1e-15) {
-        yMin -= 1;
-        yMax += 1;
-      }
-
-      // Y-axis starts at zero (|T|² ≥ 0)
+      // Y-axis starts at zero (|T|² ≥ 0); add 10% headroom
       yMin = 0;
-      yMax = yMax * 1.1 || 1;
+      if (yMax < 1e-10) yMax = 1;  // flat ≈ 0 → show a visible range
+      yMax = yMax * 1.1;
 
       // Precompute axis tick values
       var yTicks = _niceTicks(yMin, yMax, 5);
@@ -1677,8 +1739,52 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
       var nDecays = _lastNDecays;
       var phiCombine = _lastPhiCombine;
 
-      // Compute projections
-      var projections = computeProjections(fourier, nDecays, phiCombine, decayTree);
+      // Compute projections and total integral
+      var allVars = _allVarNames(nDecays, phiCombine);
+      var projections = computeProjections(fourier, nDecays, phiCombine);
+      var totalIntGroups = computeTotalIntegral(fourier, allVars);
+
+      // Normalize each projection to unit integral: I_proj(x) = I_marginal(x) / total_integral
+      // so that ∫ I_proj(x) dx = 1 for each variable.
+      for (var vn in projections) {
+        var oldGroups = projections[vn];
+        var newGroups = {};
+        for (var pi in oldGroups) {
+          var g = oldGroups[pi];
+          for (var key in g) {
+            var sum = g[key];
+            if (sum.isEmpty()) continue;
+            for (var spi in totalIntGroups) {
+              var tsum = totalIntGroups[spi];
+              if (tsum.isEmpty()) continue;
+              var tiRat = _surSumToRational(tsum);
+              if (!tiRat) {
+                // Float fallback for sqrt-containing totals
+                var tiFloat = _surSumFloat(tsum);
+                if (Math.abs(tiFloat) < 1e-15) continue;
+                var newPi = parseInt(pi, 10) - parseInt(spi, 10);
+                // Approximate tiFloat as rational for scaling
+                var bestN = Math.round(tiFloat * 1e9);
+                var bestD = 1e9;
+                var newSum = _surSumScale(sum, bestD, bestN);
+                if (newSum.isEmpty()) continue;
+                if (!newGroups[newPi]) newGroups[newPi] = {};
+                if (!newGroups[newPi][key]) newGroups[newPi][key] = new SurdSum();
+                _surSumAdd(newGroups[newPi][key], newSum);
+              } else {
+                // Exact rational scaling: divide by tiRat.n/tiRat.d
+                var newPi = parseInt(pi, 10) - parseInt(spi, 10);
+                var newSum = _surSumScale(sum, tiRat.d, tiRat.n);
+                if (newSum.isEmpty()) continue;
+                if (!newGroups[newPi]) newGroups[newPi] = {};
+                if (!newGroups[newPi][key]) newGroups[newPi][key] = new SurdSum();
+                _surSumAdd(newGroups[newPi][key], newSum);
+              }
+            }
+          }
+        }
+        projections[vn] = newGroups;
+      }
 
       _lastProjections = projections;
 
@@ -1699,7 +1805,23 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
         return;
       }
 
-      var html = '';
+      // ── Full angular distribution and total integral ──
+      var fullExpr = AngularExpression.renderFourier(fourier, phiCombine);
+      var normStr = _renderTotalInt(totalIntGroups);
+      var globalHtml = '';
+      if (fullExpr || normStr) {
+        globalHtml = '<div class="proj-card" style="margin-bottom:1rem;">';
+        if (fullExpr) {
+          globalHtml += '<div class="proj-card-body"><div class="proj-expr"><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="I(\\theta,\\phi)=' + escapeHtml(fullExpr) + '"></span></div></div></div>';
+        }
+        if (normStr) {
+          var normLatex = '\\displaystyle\\int I(\\theta,\\phi)\\,d\\Omega=' + normStr.replace(/\\times $/, '');
+          globalHtml += '<div class="proj-card-body" style="border-top:1px solid var(--border);"><div class="proj-expr"><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(normLatex) + '"></span></div></div></div>';
+        }
+        globalHtml += '</div>';
+      }
+
+      var html = globalHtml;
       for (var vi = 0; vi < varNames.length; vi++) {
         var vn = varNames[vi];
         var groups = projections[vn];
@@ -1741,11 +1863,11 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
         if (_isThetaVar(vn)) {
           var fourierLatex = _renderProjGroups(groups, vn, phiCombine);
           var cosThetaLatex = _renderProjGroupsCosTheta(groups, vn);
-          html += '<div class="proj-expr"><span class="latex-cell" data-latex="' + escapeHtml(fourierLatex) + '"></span></div>';
-          html += '<div class="proj-expr-cos"><span class="latex-cell" data-latex="' + escapeHtml(cosThetaLatex) + '"></span></div>';
+          html += '<div class="proj-expr"><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(fourierLatex) + '"></span></div></div>';
+          html += '<div class="proj-expr-cos"><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(cosThetaLatex) + '"></span></div></div>';
         } else {
           var latexExpr = renderProjectionLatex(groups, vn, phiCombine);
-          html += '<div class="proj-expr"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div>';
+          html += '<div class="proj-expr"><div class="latex-scroll-wrap"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div></div>';
         }
 
         // Plot
