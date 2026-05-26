@@ -369,7 +369,7 @@ Trigonometric product identities expand cos(k₁θ/2)·cos(k₂θ/2) and cos(k�
       content.appendChild(document.createTextNode('J='));
       var jInput = document.createElement('input');
       jInput.type = 'text';
-      jInput.className = 'form-input';
+      jInput.className = 'form-input j-input';
       jInput.style.width = '3rem';
       jInput.style.padding = '0.25rem';
       jInput.value = formatSpinValue(node.j);
@@ -552,7 +552,7 @@ Trigonometric product identities expand cos(k₁θ/2)·cos(k₂θ/2) and cos(k�
     }
 
     function isBatchMode() {
-      var inputs = document.querySelectorAll('.tree-node .form-input');
+      var inputs = document.querySelectorAll('.tree-node .j-input');
       for (var i = 0; i < inputs.length; i++) {
         if (inputs[i].value.indexOf(',') !== -1) return true;
       }
@@ -560,7 +560,7 @@ Trigonometric product identities expand cos(k₁θ/2)·cos(k₂θ/2) and cos(k�
     }
 
     function collectSpinLists() {
-      var inputs = document.querySelectorAll('.tree-node .form-input');
+      var inputs = document.querySelectorAll('.tree-node .j-input');
       var lists = [];
       for (var i = 0; i < inputs.length; i++) {
         var val = inputs[i].value.trim();
