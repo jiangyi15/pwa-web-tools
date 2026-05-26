@@ -666,8 +666,8 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
      * This puts the physically deepest cascade angles at the top.
      */
     function _reverseVarSort(a, b) {
-      if (a === 'chi') return 1;
-      if (b === 'chi') return -1;
+      if (a === 'chi') return -1;
+      if (b === 'chi') return 1;
       // Extract numeric index from "theta_2" or "phi_1"
       var aIdx = parseInt(a.replace(/\D/g, ''), 10);
       var bIdx = parseInt(b.replace(/\D/g, ''), 10);
