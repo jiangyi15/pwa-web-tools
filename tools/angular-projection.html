@@ -1489,7 +1489,7 @@ Since the Fourier expansion is a sum of products of single-variable functions, i
             var k = parseInt(parts[1], 10);
             var angle = x;
             if (isTheta) angle = Math.acos(x);  // x = cos θ → θ = acos(x)
-            var arg = k * angle / (isTheta ? 2 : 1);  // half-angle for θ
+            var arg = k * angle / 2;  // half-angle for all variables
             val = (func === 'cos') ? Math.cos(arg) : Math.sin(arg);
           }
           var coeff = _surSumFloat(term.surdSum) * Math.pow(Math.PI, term.piExp);
