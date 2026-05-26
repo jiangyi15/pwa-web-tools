@@ -723,13 +723,17 @@ Since the Fourier expansion is a sum of products of single-variable functions, i
           return { n: si.n, d: si.d, pi: si.pi || 0 };
         }
       } else {
-        // φ/χ variable with half-angle: func(k·var/2) over [0, 2π]
-        // cos(k·var/2): ∫₀²ᵖ cos(k·var/2) d(var) = 0 for k ≠ 0
-        if (func === 'cos') return { n: 0, d: 1, pi: 0 };
-        // sin(k·var/2): ∫₀²ᵖ sin(k·var/2) d(var) = 0 for even k, 4/k for odd k
-        if (k % 2 === 0) return { n: 0, d: 1, pi: 0 };
-        var g = _gcd(4, Math.abs(k));
-        return { n: 4 / g, d: Math.abs(k) / g, pi: 0 };
+        // φ/χ variable with half-angle: func(k·var/2) over [-π, π]
+        // cos(k·var/2): ∫_{-π}^{π} cos(k·var/2) d(var) = 0 for even k ≠ 0, ±4/k for odd k
+        if (func === 'cos') {
+          if (k % 2 === 0) return { n: 0, d: 1, pi: 0 };
+          // odd k: sin(kπ/2) = 1 for k≡1 mod4, -1 for k≡3 mod4
+          var sign = (k % 4 === 1) ? 1 : -1;
+          var g = _gcd(4, Math.abs(k));
+          return { n: sign * 4 / g, d: Math.abs(k) / g, pi: 0 };
+        }
+        // sin(k·var/2): ∫_{-π}^{π} sin(k·var/2) d(var) = 0 for all k ≠ 0 (symmetric range)
+        return { n: 0, d: 1, pi: 0 };
       }
     }
 
@@ -742,7 +746,7 @@ Since the Fourier expansion is a sum of products of single-variable functions, i
         // ∫ sin θ dθ from 0 to π = 2
         return { n: 2, d: 1, pi: 0 };
       } else {
-        // ∫ dv from 0 to 2π = 2π
+        // ∫ dv from -π to π = 2π
         return { n: 2, d: 1, pi: 1 };
       }
     }
