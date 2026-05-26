@@ -261,6 +261,23 @@
                 <div id="decay-tree-container" class="decay-tree">
                   <!-- Tree will be rendered here -->
                 </div>
+
+                <div class="input-section" style="margin-top: 0.75rem;">
+                  <div class="input-section-title">Helicity Filter (optional)</div>
+                  <p class="form-hint" style="margin-bottom: 0.4rem;">
+                    Restrict helicities for root and/or final particles. Leave empty for all possible values.
+                  </p>
+                  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:120px;">
+                      <label class="form-label">Root helicities</label>
+                      <input type="text" id="root-helicities" class="form-input" placeholder="e.g. 1/2, -1/2" style="width:100%;">
+                    </div>
+                    <div style="flex:1;min-width:120px;">
+                      <label class="form-label">Final helicities</label>
+                      <input type="text" id="final-helicities" class="form-input" placeholder="e.g. 0" style="width:100%;">
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div class="btn-group">
@@ -1593,7 +1610,11 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
 
       setTimeout(function() {
         try {
-          var result = AngularExpression.compute(decayTree, { showInterference: false });
+          var result = AngularExpression.compute(decayTree, {
+            showInterference: false,
+            rootHelicities: document.getElementById('root-helicities').value.trim() || null,
+            finalHelicities: document.getElementById('final-helicities').value.trim() || null
+          });
           if (!result || result.error) {
             showError(result ? result.error : 'Computation failed');
             return;

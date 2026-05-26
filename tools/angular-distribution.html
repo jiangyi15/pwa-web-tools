@@ -218,6 +218,23 @@
                 </div>
               </div>
 
+              <div class="input-section" style="padding:0 0.75rem;">
+                <div class="input-section-title">Helicity Filter (optional)</div>
+                <p class="form-hint" style="margin-bottom:0.4rem;">
+                  Restrict helicities for root and/or final particles. Leave empty for all possible values.
+                </p>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                  <div style="flex:1;min-width:120px;">
+                    <label class="form-label">Root helicities</label>
+                    <input type="text" id="root-helicities" class="form-input" placeholder="e.g. 1/2, -1/2" style="width:100%;">
+                  </div>
+                  <div style="flex:1;min-width:120px;">
+                    <label class="form-label">Final helicities</label>
+                    <input type="text" id="final-helicities" class="form-input" placeholder="e.g. 0" style="width:100%;">
+                  </div>
+                </div>
+              </div>
+
               <div class="btn-group">
                 <button type="button" class="btn btn-primary" id="calculate-btn">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -697,7 +714,13 @@ Trigonometric product identities expand cos(k₁θ/2)·cos(k₂θ/2) and cos(k�
           for (var bi = 0; bi < batchTrees.length; bi++) {
             try {
               var showInterference = document.getElementById('show-interference').checked;
-              var result = AngularExpression.compute(batchTrees[bi].tree, { showInterference: showInterference });
+              var rootHel = document.getElementById('root-helicities').value.trim() || null;
+              var finalHel = document.getElementById('final-helicities').value.trim() || null;
+              var result = AngularExpression.compute(batchTrees[bi].tree, {
+                showInterference: showInterference,
+                rootHelicities: rootHel,
+                finalHelicities: finalHel
+              });
               if (result && !result.error) {
                 results.push({ label: batchTrees[bi].label, latexLabel: batchTrees[bi].latexLabel, result: result, error: null });
                 nOk++;

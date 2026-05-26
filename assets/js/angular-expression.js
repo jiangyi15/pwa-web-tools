@@ -42,8 +42,31 @@ var AngularExpression = (function() {
     // Combine across cascade
     var combined = _combineStructured(vertexTerms, tree, 0);
 
-    // Collect all helicity keys and LS keys
+    // Collect all helicity keys
     var allHK = Object.keys(combined);
+
+    // ── Filter helicities if specified ──
+    if (options && (options.rootHelicities || options.finalHelicities)) {
+      var rootFilter = options.rootHelicities ? _normalizeHelicityList(options.rootHelicities) : null;
+      var finalFilter = options.finalHelicities ? _normalizeHelicityList(options.finalHelicities) : null;
+
+      allHK = allHK.filter(function(hk) {
+        var parts = hk.split(',').map(function(s) { return parseFloat(s); });
+
+        // Filter root helicity (position 0)
+        if (rootFilter && _helIdx(parts[0], rootFilter) < 0) return false;
+
+        // Filter final particle helicities (positions 1+)
+        if (finalFilter) {
+          for (var i = 1; i < parts.length; i++) {
+            if (_helIdx(parts[i], finalFilter) < 0) return false;
+          }
+        }
+
+        return true;
+      });
+    }
+
     if (allHK.length === 0) return { error: 'No valid helicity combinations.' };
 
     var allLS = {};
@@ -516,6 +539,46 @@ var AngularExpression = (function() {
    */
   function _tpParseSurd(s) {
     try { return Surd.parse(s); } catch (e) { return Surd.ZERO; }
+  }
+
+  /**
+   * Normalize a helicity list from string or array form.
+   * Accepts: "1/2, -1/2", [0.5, -0.5], "1, 0, -1"
+   * Returns: array of numbers (multiples of 0.5).
+   */
+  function _normalizeHelicityList(list) {
+    if (typeof list === 'string') {
+      var parts = list.replace(/\s/g, '').split(',');
+      var result = [];
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        if (p === '') continue;
+        var slashIdx = p.indexOf('/');
+        var val;
+        if (slashIdx >= 0) {
+          var num = parseInt(p.substring(0, slashIdx), 10);
+          var den = parseInt(p.substring(slashIdx + 1), 10);
+          val = den ? num / den : num;
+        } else {
+          val = parseFloat(p);
+        }
+        if (!isNaN(val) && isFinite(val)) result.push(val);
+      }
+      return result;
+    }
+    if (Array.isArray(list)) return list.slice();
+    return [];
+  }
+
+  /**
+   * Find index of helicity value in list (with tolerance).
+   */
+  function _helIdx(val, list) {
+    var v = Math.round(val * 1e10) / 1e10;
+    for (var i = 0; i < list.length; i++) {
+      if (Math.abs(v - list[i]) < 1e-10) return i;
+    }
+    return -1;
   }
 
   return api;
