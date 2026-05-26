@@ -1446,9 +1446,8 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
       }
 
       // Y-axis starts at zero (|T|² ≥ 0)
-      var yRange = yMax - yMin;
       yMin = 0;
-      yMax += yRange * 0.1;
+      yMax = yMax * 1.1 || 1;
 
       // Precompute axis tick values
       var yTicks = _niceTicks(yMin, yMax, 5);
