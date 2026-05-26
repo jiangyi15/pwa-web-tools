@@ -56,9 +56,9 @@ var AngularExpression = (function() {
         // Filter root helicity (position 0)
         if (rootFilter && _helIdx(parts[0], rootFilter) < 0) return false;
 
-        // Filter final particle helicities (positions 1+)
+        // Filter all final/root particle helicities (all positions)
         if (finalFilter) {
-          for (var i = 1; i < parts.length; i++) {
+          for (var i = 0; i < parts.length; i++) {
             if (_helIdx(parts[i], finalFilter) < 0) return false;
           }
         }
