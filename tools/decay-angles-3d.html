@@ -310,7 +310,6 @@
       <div class="sidebar-section">
         <div class="sidebar-section-title">Controls</div>
         <div class="viewer-controls">
-          <button class="btn btn-secondary btn-small" onclick="addChildToRoot()">+ Add Decay</button>
           <button class="btn btn-secondary btn-small" onclick="resetTree()">Reset</button>
           <button class="btn btn-secondary btn-small" onclick="resetCamera()">Reset View</button>
           <span style="font-size:0.65rem;color:var(--text-muted);align-self:center;">View:</span>
@@ -649,10 +648,10 @@
         angleDiv.style.paddingLeft = '1.8rem';
         angleDiv.style.width = '100%';
 
-        // Theta
+        // Phi (first rotation)
+        angleDiv.appendChild(createAngleSlider(path, 'φ', ang, 'phi', -180, 180));
+        // Theta (second rotation)
         angleDiv.appendChild(createAngleSlider(path, 'θ', ang, 'theta', 0, 180));
-        // Phi
-        angleDiv.appendChild(createAngleSlider(path, 'φ', ang, 'phi', 0, 360));
 
         div.appendChild(angleDiv);
       }
@@ -732,7 +731,7 @@
     };
 
     window.resetTree = function() {
-      decayTree = { children: null };
+      decayTree = { children: [{ children: null }, { children: null }] };
       angleValues = {};
       selectedDecayPath = null;
       targetDecayPos = null;
@@ -741,6 +740,7 @@
       clearScene();
       document.getElementById('angle-info-overlay').style.display = 'none';
       document.getElementById('viewport-placeholder').style.display = '';
+      scheduleRender();
     };
 
     function resetCamera() {
@@ -1102,6 +1102,29 @@
         drawSmallArrow(decayPos, child1.position, child1.color);
       }
 
+      // ── Phi arc (azimuthal angle around vz) — drawn first (φ rotation before θ) ──
+      if (showPhiArc && Math.abs(phi) > 0.01) {
+        var phiArcRadius = SCALE * 0.35;
+        // Draw from refDir direction to the projection of arrow on the perpendicular plane.
+        // φ = 0 is along refDir, so the arc from refDir to the child's in-plane projection
+        // directly traces the φ angle, with length proportional to |φ|.
+        var projArrow = arrow.clone();
+        // Remove component along dir to get projection onto perpendicular plane
+        var alongDir = projArrow.dot(dir);
+        projArrow.addScaledVector(dir, -alongDir);
+        if (projArrow.length() > 1e-10) projArrow.normalize();
+
+        drawPhiArc(
+          decayPos,
+          refDir.clone().multiplyScalar(phiArcRadius),
+          projArrow.clone().multiplyScalar(phiArcRadius),
+          dir,
+          0x6bb5ff,
+          2,
+          24
+        );
+      }
+
       // ── Theta arc (from vz direction to arrow direction) ──
       if (theta > 0.01) {
         drawArc(
@@ -1111,29 +1134,6 @@
           0xff6b6b,
           2,
           32
-        );
-      }
-
-      // ── Phi arc (azimuthal angle around vz) ──
-      if (showPhiArc && Math.abs(phi) > 0.01) {
-        var phiArcRadius = SCALE * 0.35;
-        // Draw from vy direction to the projection of arrow on the perpendicular plane
-        // vy is perpendicular to dir, so the arc from vy around dir shows phi
-        var vyDir = vy.clone().normalize();
-        var projArrow = arrow.clone();
-        // Remove component along dir to get projection onto perpendicular plane
-        var alongDir = projArrow.dot(dir);
-        projArrow.addScaledVector(dir, -alongDir);
-        if (projArrow.length() > 1e-10) projArrow.normalize();
-
-        drawPhiArc(
-          decayPos,
-          vyDir.clone().multiplyScalar(phiArcRadius),
-          projArrow.clone().multiplyScalar(phiArcRadius),
-          dir,
-          0x6bb5ff,
-          2,
-          24
         );
       }
 
@@ -1339,7 +1339,7 @@
           lines.push(
             '<div class="info-row">' +
             '<span class="info-particle">' + nd.name + '</span>' +
-            '<span class="info-angles">θ=' + thetaDeg + '° φ=' + phiDeg + '°</span>' +
+            '<span class="info-angles">φ=' + phiDeg + '° θ=' + thetaDeg + '°</span>' +
             '</div>'
           );
         }
