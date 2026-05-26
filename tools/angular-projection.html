@@ -190,7 +190,15 @@
       min-height: 2rem;
       color: var(--accent);
       font-size: 0.95rem;
-      overflow-x: auto;
+    }
+    .proj-expr-cos {
+      text-align: center;
+      padding: 0.3rem 0.5rem;
+      margin-bottom: 0.5rem;
+      min-height: 1.5rem;
+      color: var(--accent-dim);
+      font-size: 0.85rem;
+      font-style: italic;
     }
     .proj-plot-wrap {
       width: 100%;
@@ -961,8 +969,284 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
     }
 
     // ══════════════════════════════════════════════════════════
-    // LATEX RENDERING with π grouping
+    // COS θ BASIS CONVERSION (alternative to half-angle Fourier)
     // ══════════════════════════════════════════════════════════
+    //
+    // Express I(θ) = Σ [c_k·cos(k·θ/2) + s_k·sin(k·θ/2)]  as:
+    //
+    //   I(x) = P_0(x) + P_1(x)·√(1-x²) + P_2(x)·√((1+x)/2) + P_3(x)·√((1-x)/2)
+    //
+    // where x = cos θ, sin θ = √(1-x²) ≥ 0 for θ ∈ [0, π].
+    //
+    // Uses Chebyshev identities:
+    //   even k=2m:  cos(mθ)=T_m(x),  sin(mθ)=√(1-x²)·U_{m-1}(x)
+    //   odd k=2m+1: cos((2m+1)θ/2)=√((1+x)/2)·P_m(x),  sin(...)=√((1-x)/2)·Q_m(x)
+    //   P_m(x)=T_m(x)-(1-x)U_{m-1}(x),  Q_m(x)=T_m(x)+(1+x)U_{m-1}(x)
+
+    // ── Chebyshev T_m(x) as integer coefficient array [a0, a1, ..., am] ──
+    function _chebyshevT(m) {
+      if (m < 0) return [];
+      if (m === 0) return [1];
+      if (m === 1) return [0, 1];
+      var prev = [1];
+      var curr = [0, 1];
+      for (var n = 2; n <= m; n++) {
+        var next = [];
+        // 2x·T_{n-1} - T_{n-2}
+        for (var i = 0; i <= curr.length; i++) {
+          next[i] = (next[i] || 0) + (i > 0 ? 2 * (curr[i - 1] || 0) : 0);
+        }
+        for (var i = 0; i < prev.length; i++) {
+          next[i] = (next[i] || 0) - (prev[i] || 0);
+        }
+        while (next.length > 0 && next[next.length - 1] === 0) next.pop();
+        prev = curr; curr = next;
+      }
+      return curr;
+    }
+
+    // ── Chebyshev U_m(x) as integer coefficient array ──
+    function _chebyshevU(m) {
+      if (m < 0) return [];
+      if (m === 0) return [1];
+      if (m === 1) return [0, 2];
+      var prev = [1];
+      var curr = [0, 2];
+      for (var n = 2; n <= m; n++) {
+        var next = [];
+        for (var i = 0; i <= curr.length; i++) {
+          next[i] = (next[i] || 0) + (i > 0 ? 2 * (curr[i - 1] || 0) : 0);
+        }
+        for (var i = 0; i < prev.length; i++) {
+          next[i] = (next[i] || 0) - (prev[i] || 0);
+        }
+        while (next.length > 0 && next[next.length - 1] === 0) next.pop();
+        prev = curr; curr = next;
+      }
+      return curr;
+    }
+
+    // ── P_m(x) = T_m(x) - (1-x)·U_{m-1}(x) ──
+    function _chebyshevP(m) {
+      if (m === 0) return [1];
+      var t = _chebyshevT(m);
+      var u = _chebyshevU(m - 1);
+      // (1-x)·U = U - x·U
+      var xU = []; // x·U has coefficients shifted by 1
+      for (var i = 0; i < u.length; i++) {
+        xU[i + 1] = (xU[i + 1] || 0) + u[i];
+      }
+      var len = Math.max(t.length, u.length, xU.length);
+      var result = [];
+      for (var i = 0; i < len; i++) {
+        var v = (t[i] || 0) - (u[i] || 0) + (xU[i] || 0);
+        if (v !== 0) result[i] = v;
+      }
+      while (result.length > 0 && result[result.length - 1] === 0) result.pop();
+      return result;
+    }
+
+    // ── Q_m(x) = T_m(x) + (1+x)·U_{m-1}(x) ──
+    function _chebyshevQ(m) {
+      if (m === 0) return [1];
+      var t = _chebyshevT(m);
+      var u = _chebyshevU(m - 1);
+      var xU = [];
+      for (var i = 0; i < u.length; i++) {
+        xU[i + 1] = (xU[i + 1] || 0) + u[i];
+      }
+      var len = Math.max(t.length, u.length, xU.length);
+      var result = [];
+      for (var i = 0; i < len; i++) {
+        var v = (t[i] || 0) + (u[i] || 0) + (xU[i] || 0);
+        if (v !== 0) result[i] = v;
+      }
+      while (result.length > 0 && result[result.length - 1] === 0) result.pop();
+      return result;
+    }
+
+    // ── Render polynomial { power: SurdSum } to LaTeX ──
+    function _polyToLatex(polyMap) {
+      var powers = Object.keys(polyMap).map(Number).sort(function(a, b) { return a - b; });
+      var parts = [];
+      for (var pi = 0; pi < powers.length; pi++) {
+        var pow = powers[pi];
+        var sum = polyMap[pow];
+        if (sum.isEmpty()) continue;
+        var s = sum.toLatex();
+        if (s === '0') continue;
+
+        // Build term: coefficient × x^pow
+        var isNeg = (s.charAt(0) === '-');
+        var absS = isNeg ? s.substring(1) : s;
+        var coeffPart;
+        if (pow === 0) {
+          coeffPart = s;
+        } else if (absS === '1') {
+          coeffPart = (isNeg ? '-x' : 'x') + (pow > 1 ? '^{' + pow + '}' : '');
+          if (parts.length === 0) { parts.push(coeffPart); continue; }
+          coeffPart = isNeg ? '-x' : 'x';
+          coeffPart += (pow > 1 ? '^{' + pow + '}' : '');
+          if (parts.length === 0) { parts.push(coeffPart); continue; }
+          parts.push((isNeg ? ' \\!-\\! ' : ' \\!+\\! ') + 'x' + (pow > 1 ? '^{' + pow + '}' : ''));
+          continue;
+        } else {
+          coeffPart = absS + '\\,x';
+          if (pow > 1) coeffPart += '^{' + pow + '}';
+          if (parts.length === 0) {
+            parts.push((isNeg ? '-' : '') + coeffPart);
+            continue;
+          }
+          parts.push((isNeg ? ' \\!-\\! ' : ' \\!+\\! ') + coeffPart);
+          continue;
+        }
+
+        if (parts.length === 0) {
+          parts.push(coeffPart);
+        } else {
+          parts.push((isNeg ? ' \\!-\\! ' : ' \\!+\\! ') + (pow === 0 ? absS : coeffPart));
+        }
+      }
+
+      // rebuild for sign handling
+      parts = [];
+      for (var pi = 0; pi < powers.length; pi++) {
+        var pow = powers[pi];
+        var sum = polyMap[pow];
+        if (sum.isEmpty()) continue;
+        var s = sum.toLatex();
+        if (s === '0') continue;
+        var isNeg = (s.charAt(0) === '-');
+        var absS = isNeg ? s.substring(1) : s;
+
+        var term;
+        if (pow === 0) {
+          term = s;
+        } else {
+          if (absS === '1') {
+            term = 'x' + (pow > 1 ? '^{' + pow + '}' : '');
+          } else {
+            term = absS + '\\,x' + (pow > 1 ? '^{' + pow + '}' : '');
+          }
+          if (isNeg) term = '-' + term;
+        }
+
+        if (parts.length === 0) {
+          parts.push(term);
+        } else {
+          if (term.charAt(0) === '-') {
+            parts.push(' \\!-\\! ' + term.substring(1));
+          } else {
+            parts.push(' \\!+\\! ' + (term.charAt(0) === '+' ? term.substring(1) : term));
+          }
+        }
+      }
+
+      return parts.length === 0 ? '0' : parts.join('');
+    }
+
+    // ── Render projection groups in cos θ basis ──
+    function _renderProjGroupsCosTheta(groups, varName) {
+      if (!_isThetaVar(varName)) return _renderProjGroups(groups, varName, null);
+
+      var piExps = Object.keys(groups).map(Number).sort(function(a, b) { return a - b; });
+      if (piExps.length === 0) return '= 0';
+
+      // Accumulate: piExp → [{power: SurdSum}, {power: SurdSum}, {power: SurdSum}, {power: SurdSum}]
+      // Types: 0=polynomial, 1=√(1-x²), 2=√((1+x)/2), 3=√((1-x)/2)
+      var acc = {};
+
+      for (var piIdx = 0; piIdx < piExps.length; piIdx++) {
+        var piExp = piExps[piIdx];
+        if (!acc[piExp]) acc[piExp] = [{}, {}, {}, {}];
+
+        var fourier = groups[piExp];
+        for (var key in fourier) {
+          var sum = fourier[key];
+          if (sum.isEmpty()) continue;
+
+          if (key === '1') {
+            if (!acc[piExp][0][0]) acc[piExp][0][0] = new SurdSum();
+            _surSumAdd(acc[piExp][0][0], sum);
+            continue;
+          }
+
+          var factors = _parseFourierKey(key);
+          if (factors.length !== 1) continue;
+          var f = factors[0];
+          var func = f.func, k = Math.round(f.k);
+          var m = Math.floor(k / 2);
+          var isEven = (k % 2 === 0);
+
+          var typeIdx, intPoly;
+          if (isEven) {
+            if (func === 'cos') { typeIdx = 0; intPoly = _chebyshevT(m); }
+            else { typeIdx = 1; intPoly = _chebyshevU(m - 1); }
+          } else {
+            if (func === 'cos') { typeIdx = 2; intPoly = _chebyshevP(m); }
+            else { typeIdx = 3; intPoly = _chebyshevQ(m); }
+          }
+
+          if (!intPoly || intPoly.length === 0) continue;
+
+          var typePoly = acc[piExp][typeIdx];
+          for (var pw = 0; pw < intPoly.length; pw++) {
+            var ic = intPoly[pw];
+            if (ic === 0) continue;
+            var scaled = _surSumScale(sum, ic, 1);
+            if (!typePoly[pw]) typePoly[pw] = new SurdSum();
+            _surSumAdd(typePoly[pw], scaled);
+          }
+        }
+      }
+
+      // ── Render LaTeX ──
+      var basisLatex = [
+        '',                                    // type 0: polynomial alone
+        '\\sqrt{1-x^{2}}',                     // type 1: √(1-x²)
+        '\\sqrt{\\tfrac{1+x}{2}}',             // type 2: √((1+x)/2)
+        '\\sqrt{\\tfrac{1-x}{2}}'              // type 3: √((1-x)/2)
+      ];
+
+      var lines = '';
+      var firstOverall = true;
+
+      for (var piIdx = 0; piIdx < piExps.length; piIdx++) {
+        var piExp = piExps[piIdx];
+        var types = acc[piExp];
+
+        var piStr = '';
+        if (piExp === 1) piStr = '\\pi';
+        else if (piExp !== 0) piStr = '\\pi^{' + piExp + '}';
+
+        for (var t = 0; t < 4; t++) {
+          var poly = types[t];
+          var polyKeys = Object.keys(poly);
+          if (polyKeys.length === 0) continue;
+
+          var polyStr = _polyToLatex(poly);
+          if (polyStr === '0' || polyStr === '') continue;
+
+          // Build: poly × basis × π^pi
+          var termStr = polyStr;
+          if (basisLatex[t]) termStr += '\\!\\cdot\\!' + basisLatex[t];
+          if (piStr) termStr += '\\!\\cdot\\!' + piStr;
+
+          if (firstOverall) {
+            lines = termStr;
+            firstOverall = false;
+          } else {
+            if (termStr.charAt(0) === '-') {
+              lines += ' \\!-\\! ' + termStr.substring(1);
+            } else {
+              lines += ' \\!+\\! ' + (termStr.charAt(0) === '+' ? termStr.substring(1) : termStr);
+            }
+          }
+        }
+      }
+
+      return '= ' + (lines || '0');
+    }
 
     /**
      * Render a π-grouped projection map to LaTeX.
@@ -1032,6 +1316,7 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
 
     /**
      * Render a single π-grouped projection showing the constant term prominently.
+     * Uses half-angle Fourier basis.
      */
     function renderProjectionLatex(groups, varName, phiCombine) {
       if (!groups || Object.keys(groups).length === 0) return '= 0';
@@ -1429,8 +1714,15 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
         html += '<div class="proj-card-body">';
 
         // Expression
-        var latexExpr = renderProjectionLatex(groups, vn, phiCombine);
-        html += '<div class="proj-expr"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div>';
+        if (_isThetaVar(vn)) {
+          var fourierLatex = _renderProjGroups(groups, vn, phiCombine);
+          var cosThetaLatex = _renderProjGroupsCosTheta(groups, vn);
+          html += '<div class="proj-expr"><span class="latex-cell" data-latex="' + escapeHtml(fourierLatex) + '"></span></div>';
+          html += '<div class="proj-expr-cos"><span class="latex-cell" data-latex="' + escapeHtml(cosThetaLatex) + '"></span></div>';
+        } else {
+          var latexExpr = renderProjectionLatex(groups, vn, phiCombine);
+          html += '<div class="proj-expr"><span class="latex-cell" data-latex="' + escapeHtml(latexExpr) + '"></span></div>';
+        }
 
         // Plot
         var canvasId = 'proj-canvas-' + vi;
