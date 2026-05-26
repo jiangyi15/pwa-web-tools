@@ -45,24 +45,16 @@ var AngularExpression = (function() {
     // Collect all helicity keys
     var allHK = Object.keys(combined);
 
-    // ── Filter helicities if specified ──
-    if (options && (options.rootHelicities || options.finalHelicities)) {
-      var rootFilter = options.rootHelicities ? _normalizeHelicityList(options.rootHelicities) : null;
-      var finalFilter = options.finalHelicities ? _normalizeHelicityList(options.finalHelicities) : null;
+    // ── Per-particle helicity filters (path → filter-string) ──
+    if (options && options.helicityFilters) {
+      var filterArray = _buildHelicityFilterArray(tree, options.helicityFilters);
 
       allHK = allHK.filter(function(hk) {
-        var parts = hk.split(',').map(function(s) { return parseFloat(s); });
-
-        // Filter root helicity (position 0)
-        if (rootFilter && _helIdx(parts[0], rootFilter) < 0) return false;
-
-        // Filter all final/root particle helicities (all positions)
-        if (finalFilter) {
-          for (var i = 0; i < parts.length; i++) {
-            if (_helIdx(parts[i], finalFilter) < 0) return false;
-          }
+        var parts = hk.split(',').map(parseFloat);
+        for (var i = 0; i < parts.length && i < filterArray.length; i++) {
+          var f = filterArray[i];
+          if (f && f.length > 0 && _helIdx(parts[i], f) < 0) return false;
         }
-
         return true;
       });
     }
@@ -539,6 +531,39 @@ var AngularExpression = (function() {
    */
   function _tpParseSurd(s) {
     try { return Surd.parse(s); } catch (e) { return Surd.ZERO; }
+  }
+
+  /**
+   * Build a helicity filter array matching the helicity key order of the tree.
+   * Walks the tree in DFS order (same as _combineStructured):
+   *   - Root particle → position 0
+   *   - Leaf (non-decaying) particles → subsequent positions
+   *   - Internal decaying particles → skipped (their helicities are matched, not in key)
+   *
+   * @param {Object} tree  Decay tree { j, children }
+   * @param {Object} filterMap  { "path-string": "filter-string", ... }
+   *        e.g. { "": "1/2,-1/2", "0,0": "0", "1": "0" }
+   * @return {Array}  Array where entry i = normalized helicity array (or null)
+   *                  for helicity key position i.
+   */
+  function _buildHelicityFilterArray(tree, filterMap) {
+    function walk(node, path) {
+      var arr = [];
+      var ps = path.join(',');
+      if (path.length === 0) {
+        // Root → position 0
+        arr.push(filterMap[ps] ? _normalizeHelicityList(filterMap[ps]) : null);
+      }
+      if (node.children) {
+        arr = arr.concat(walk(node.children[0], path.concat(0)));
+        arr = arr.concat(walk(node.children[1], path.concat(1)));
+      } else if (path.length > 0) {
+        // Leaf particle → next helicity key position
+        arr.push(filterMap[ps] ? _normalizeHelicityList(filterMap[ps]) : null);
+      }
+      return arr;
+    }
+    return walk(tree, []);
   }
 
   /**

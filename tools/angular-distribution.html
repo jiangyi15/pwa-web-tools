@@ -218,23 +218,6 @@
                 </div>
               </div>
 
-              <div class="input-section" style="padding:0 0.75rem;">
-                <div class="input-section-title">Helicity Filter (optional)</div>
-                <p class="form-hint" style="margin-bottom:0.4rem;">
-                  Restrict helicities for root and/or final particles. Leave empty for all possible values.
-                </p>
-                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                  <div style="flex:1;min-width:120px;">
-                    <label class="form-label">Root helicities</label>
-                    <input type="text" id="root-helicities" class="form-input" placeholder="e.g. 1/2, -1/2" style="width:100%;">
-                  </div>
-                  <div style="flex:1;min-width:120px;">
-                    <label class="form-label">Final helicities</label>
-                    <input type="text" id="final-helicities" class="form-input" placeholder="e.g. 0" style="width:100%;">
-                  </div>
-                </div>
-              </div>
-
               <div class="btn-group">
                 <button type="button" class="btn btn-primary" id="calculate-btn">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -404,6 +387,19 @@ Trigonometric product identities expand cos(k₁θ/2)·cos(k₂θ/2) and cos(k�
         angleIdxLabel.textContent = '(φ' + angleIdx.v + ', θ' + angleIdx.v + ')';
         content.appendChild(angleIdxLabel);
         angleIdx.v++;
+      }
+      
+      // Helicity filter input (for root and final particles only)
+      if (path.length === 0 || !node.children) {
+        content.appendChild(document.createTextNode(' λ='));
+        var helInput = document.createElement('input');
+        helInput.type = 'text';
+        helInput.className = 'form-input hel-input';
+        helInput.style.width = '3.5rem';
+        helInput.style.padding = '0.25rem';
+        helInput.placeholder = 'all';
+        helInput.dataset.path = path.join(',');
+        content.appendChild(helInput);
       }
       
       // Status button (decay further / final)
@@ -713,14 +709,20 @@ Trigonometric product identities expand cos(k₁θ/2)·cos(k₂θ/2) and cos(k�
 
           for (var bi = 0; bi < batchTrees.length; bi++) {
             try {
-              var showInterference = document.getElementById('show-interference').checked;
-              var rootHel = document.getElementById('root-helicities').value.trim() || null;
-              var finalHel = document.getElementById('final-helicities').value.trim() || null;
-              var result = AngularExpression.compute(batchTrees[bi].tree, {
-                showInterference: showInterference,
-                rootHelicities: rootHel,
-                finalHelicities: finalHel
-              });
+                var showInterference = document.getElementById('show-interference').checked;
+
+                // Collect per-particle helicity filters
+                var helInputs = document.querySelectorAll('.hel-input');
+                var helicityFilters = {};
+                for (var hi = 0; hi < helInputs.length; hi++) {
+                  var val = helInputs[hi].value.trim();
+                  if (val) helicityFilters[helInputs[hi].dataset.path] = val;
+                }
+
+                var result = AngularExpression.compute(batchTrees[bi].tree, {
+                  showInterference: showInterference,
+                  helicityFilters: Object.keys(helicityFilters).length > 0 ? helicityFilters : null
+                });
               if (result && !result.error) {
                 results.push({ label: batchTrees[bi].label, latexLabel: batchTrees[bi].latexLabel, result: result, error: null });
                 nOk++;
