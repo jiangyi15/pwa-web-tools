@@ -109,7 +109,7 @@ var AngularExpression = (function() {
           tpSq.substitute(subMap);
         }
 
-        lsMap[lk].fourier = tpSq.toFourierMap();
+        _accumulateFourier(lsMap[lk].fourier, tpSq.toFourierMap());
       }
     }
 
@@ -158,7 +158,7 @@ var AngularExpression = (function() {
               subMap['phi_' + phiCombine.chiIdx] = 'chi';
               tpRe.substitute(subMap);
             }
-            interfMap[pairKey].fourier = tpRe.toFourierMap();
+            _accumulateFourier(interfMap[pairKey].fourier, tpRe.toFourierMap());
 
             // 2 Im[T1·T2*] = 2 · (im1·re2 - re1·im2)
             var imagResult = _tpImagCrossMul(terms1, terms2);
@@ -166,7 +166,7 @@ var AngularExpression = (function() {
               imagResult = _tpScale(imagResult, 2);
               imagResult.expand();
               _tpApplyPhiCombine(imagResult, phiCombine);
-              interfImagMap[pairKey].fourier = imagResult.toFourierMap();
+              _accumulateFourier(interfImagMap[pairKey].fourier, imagResult.toFourierMap());
             }
           }
         }
@@ -219,7 +219,7 @@ var AngularExpression = (function() {
             tpRe = _tpScale(tpRe, 2);
             tpRe.expand();
             _tpApplyPhiCombine(tpRe, phiCombine);
-            interfMap[pairKey].fourier = tpRe.toFourierMap();
+            _accumulateFourier(interfMap[pairKey].fourier, tpRe.toFourierMap());
 
             // 2 Im[T1·T2*]
             var imagResult = _tpImagCrossMul(terms1, terms2);
@@ -227,7 +227,7 @@ var AngularExpression = (function() {
               imagResult = _tpScale(imagResult, 2);
               imagResult.expand();
               _tpApplyPhiCombine(imagResult, phiCombine);
-              interfImagMap[pairKey].fourier = imagResult.toFourierMap();
+              _accumulateFourier(interfImagMap[pairKey].fourier, imagResult.toFourierMap());
             }
           }
         }
@@ -524,6 +524,25 @@ var AngularExpression = (function() {
     subMap['phi_' + phiCombine.fixIdx] = null;
     subMap['phi_' + phiCombine.chiIdx] = 'chi';
     tp.substitute(subMap);
+  }
+
+  /**
+   * Accumulate one Fourier map into another.
+   * Fourier map values are SurdSum objects (ordered sums of Surd terms).
+   * Used in helicity-accumulation loops where multiple helicities
+   * contribute to the same LS or interference term.
+   */
+  function _accumulateFourier(target, source) {
+    for (var k in source) {
+      var sum = source[k];
+      if (sum.isEmpty()) continue;
+      if (!target[k]) target[k] = new SurdSum();
+      var terms = sum.terms();
+      for (var i = 0; i < terms.length; i++) {
+        target[k].add(terms[i]);
+      }
+      if (target[k].isEmpty()) delete target[k];
+    }
   }
 
   /**
