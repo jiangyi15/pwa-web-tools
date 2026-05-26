@@ -321,7 +321,7 @@
             <div class="formula-card">
               <h4 class="formula-title">Angular Projections</h4>
               <div class="formula-content" style="font-size: 0.8125rem;">
-The angular distribution I(θ,φ,χ) is expressed as Fourier modes cos(k·θ/2)·cos(k·φ/2)·sin(k·χ/2) etc. All angles use the same half-angle basis with integer k; for half-integer spins the φ/χ k can be odd (giving φ/2, 3φ/2, …).
+The angular distribution I(θ,φ,χ) is expressed as Fourier modes cos(k·θ/2)·cos(k·φ/2)·sin(k·χ/2) etc. All angles use the same half-angle basis with integer k; for half-integer spins the φ/χ k can be odd (giving φ/2, 3φ/2, …). The variable ranges are cos θ ∈ [−1, 1], φ ∈ [−π, π], and χ ∈ [−π, π].
 
 <b>1D projections</b> are obtained by integrating over all angles except one:
 \[
@@ -331,11 +331,7 @@ where \(d\mu(\theta_i) = d(\cos\theta_i)\) and \(d\mu(\phi_i) = d\phi_i\), \(d\m
 
 Since the Fourier expansion is a sum of products of single-variable functions, integration reduces each variable independently. The result is a 1D Fourier series in the remaining variable.
 
-<b>Normalization:</b> The angular distribution is normalized so that a uniform distribution gives marginal density \(I(\cos\theta_i) = 1/2\) and \(I(\phi_i) = I(\chi) = 1/(2\pi)\). The normalization factor is:
-\[
-\text{norm} = \frac{\prod_i (2J_i+1)}{2^{N_\theta}\, (2\pi)^{N_\phi}}
-\]
-where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of φ/χ variables, and \(J_i\) is the spin of the mother particle at each decay vertex.
+<b>Normalization:</b> Each projection is normalized to unit integral: \(\int I_{\text{proj}}(v)\,dv = 1\). A uniform distribution then gives marginal density \(I(\cos\theta_i) = 1/2\) (range length 2) and \(I(\phi_i) = I(\chi) = 1/(2\pi)\) (range length \(2\pi\)). This is achieved by dividing the marginal integral \(\int I\prod_{u\neq v} d\mu(u)\) by the total angular integral \(\int I\,d\Omega\).
               </div>
             </div>
           </div>
@@ -1437,12 +1433,12 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
         var tIdx = parseInt(varName.replace('theta_', ''), 10);
         yLabel = 'cos θ' + String.fromCharCode(0x2080 + tIdx);
       } else if (varName === 'chi') {
-        xMin = 0;
-        xMax = 2 * Math.PI;
+        xMin = -Math.PI;
+        xMax = Math.PI;
         yLabel = 'χ';
       } else {
-        xMin = 0;
-        xMax = 2 * Math.PI;
+        xMin = -Math.PI;
+        xMax = Math.PI;
         var pIdx = parseInt(varName.replace('phi_', ''), 10);
         yLabel = 'φ' + String.fromCharCode(0x2080 + pIdx);
       }
@@ -1514,7 +1510,7 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
       // Precompute axis tick values
       var yTicks = _niceTicks(yMin, yMax, 5);
       var xTicks = isTheta ? [-1, -0.5, 0, 0.5, 1]
-                          : [0, Math.PI/2, Math.PI, 3*Math.PI/2, 2*Math.PI];
+                          : [-Math.PI, -Math.PI/2, 0, Math.PI/2, Math.PI];
 
       // Clear
       ctx.clearRect(0, 0, W, H);
@@ -1569,9 +1565,9 @@ where \(N_\theta\) is the number of θ variables and \(N_\phi\) is the number of
         var label;
         if (xTicks[i] === 0) label = '0';
         else if (xTicks[i] === Math.PI) label = 'π';
-        else if (xTicks[i] === 2*Math.PI) label = '2π';
+        else if (xTicks[i] === -Math.PI) label = '-π';
         else if (xTicks[i] === Math.PI/2) label = 'π/2';
-        else if (xTicks[i] === 3*Math.PI/2) label = '3π/2';
+        else if (xTicks[i] === -Math.PI/2) label = '-π/2';
         else if (xTicks[i] === Math.PI/4) label = 'π/4';
         else if (xTicks[i] === 3*Math.PI/4) label = '3π/4';
         else if (xTicks[i] === 1) label = '1';
