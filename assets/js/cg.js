@@ -1,6 +1,6 @@
 /**
  * Clebsch-Gordan Coefficient Calculator
- * Uses Algebrite for exact symbolic computation
+ * Exact BigInt arithmetic via the Racah formula
  * 
  * Formula:
  * ⟨j1 m1 j2 m2 | J M⟩ = δ(m1+m2, M) · √( (2J+1) · Δ(j1,j2,J) ) ·
@@ -17,7 +17,7 @@
 /**
  * Parse a string input to a number
  * Accepts: "1/2", "3/2", "-1/2", "0.5", "1", "2", etc.
- * Returns: {numerator, denominator, value, algebriteForm}
+ * Returns: {numerator, denominator, value}
  */
 function parseQuantumNumber(input) {
   const s = String(input).trim();
@@ -33,12 +33,11 @@ function parseQuantumNumber(input) {
     return {
       numerator: num,
       denominator: den,
-      value: num / den,
-      algebriteForm: `(${num}/${den})`
+      value: num / den
     };
   }
 
-  // Integer-only (no decimals — use fraction syntax for half-integers)
+  // Integer-only
   const n = parseInt(s, 10);
   if (isNaN(n)) {
     throw new Error(`Invalid quantum number: ${s}. Use fraction syntax e.g. "1/2" for half-integers.`);
@@ -46,8 +45,7 @@ function parseQuantumNumber(input) {
   return {
     numerator: n,
     denominator: 1,
-    value: n,
-    algebriteForm: n < 0 ? `(${n})` : String(n)
+    value: n
   };
 }
 
@@ -73,11 +71,6 @@ function isValidQuantumNumber(parsed, allowNegative = false) {
  * Returns {valid: boolean, message: string, parsed: object}
  */
 function checkSelectionRules(j1, m1, j2, m2, J, M) {
-  // Check if Algebrite is loaded
-  if (typeof Algebrite === 'undefined') {
-    return { valid: false, message: 'Algebrite library is not loaded. Cannot perform calculation.' };
-  }
-  
   // Parse all inputs
   let pj1, pm1, pj2, pm2, pJ, pM;
   
@@ -428,12 +421,12 @@ function computeCGExact(j1, m1, j2, m2, J, M) {
 }
 
 // ============================================================================
-// CLEBSCH-GORDAN CALCULATION WITH ALGEBRITE
+// CLEBSCH-GORDAN CALCULATION (exact BigInt, no external deps)
 // ============================================================================
 
 /**
- * Compute Clebsch-Gordan coefficient using Algebrite
- * Returns { decimal, symbolic, error }
+ * Compute Clebsch-Gordan coefficient using exact BigInt arithmetic.
+ * Returns { decimal, symbolic, latex, error }
  */
 function computeCG(j1, m1, j2, m2, J, M) {
   // Check selection rules
@@ -442,96 +435,29 @@ function computeCG(j1, m1, j2, m2, J, M) {
     return { error: rules.message };
   }
   
-  const { pj1, pm1, pj2, pm2, pJ, pM } = rules.parsed;
-  
-  const j1Val = pj1.value;
-  const m1Val = pm1.value;
-  const j2Val = pj2.value;
-  const m2Val = pm2.value;
-  const JVal = pJ.value;
-  const MVal = pM.value;
-  
-  // Convert to integers for the sum range calculation
-  // These quantities are always integers (j±m is always integer)
-  const j1PlusM1 = Math.round(j1Val + m1Val);
-  const j1MinusM1 = Math.round(j1Val - m1Val);
-  const j2PlusM2 = Math.round(j2Val + m2Val);
-  const j2MinusM2 = Math.round(j2Val - m2Val);
-  const JPlusM = Math.round(JVal + MVal);
-  const JMinusM = Math.round(JVal - MVal);
-  
-  const j1PlusJ2MinusJ = Math.round(j1Val + j2Val - JVal);
-  const JminusJ2PlusM1 = Math.round(JVal - j2Val + m1Val);
-  const JminusJ1MinusM2 = Math.round(JVal - j1Val - m2Val);
-  
-  const kMin = Math.max(0, -JminusJ2PlusM1, -JminusJ1MinusM2);
-  const kMax = Math.min(j1PlusJ2MinusJ, j1MinusM1, j2PlusM2);
-  
-  if (kMin > kMax) {
-    // Sum is empty, coefficient is zero
-    return {
-      decimal: 0,
-      symbolic: '0'
-    };
-  }
-  
   try {
-    // Build the Algebrite expression
-    // We'll construct it piece by piece
+    const surd = computeCGExact(j1, m1, j2, m2, J, M);
     
-    // Get Algebrite forms for the quantum numbers
-    const aj1 = pj1.algebriteForm;
-    const am1 = pm1.algebriteForm;
-    const aj2 = pj2.algebriteForm;
-    const am2 = pm2.algebriteForm;
-    const aJ = pJ.algebriteForm;
-    const aM = pM.algebriteForm;
-    
-    // Triangle coefficient Δ(j1,j2,J)
-    // Δ = (j1+j2-J)! * (j1-j2+J)! * (-j1+j2+J)! / (j1+j2+J+1)!
-    const triangleExpr = `((${aj1}+${aj2}-${aJ})! * (${aj1}-${aj2}+${aJ})! * (-${aj1}+${aj2}+${aJ})!) / (${aj1}+${aj2}+${aJ}+1)!`;
-    
-    // Prefactor: sqrt((2J+1) * Δ(j1,j2,J) * factorial_product)
-    const factorialProduct = `(${aj1}+${am1})! * (${aj1}-${am1})! * (${aj2}+${am2})! * (${aj2}-${am2})! * (${aJ}+${aM})! * (${aJ}-${aM})!`;
-    
-    // Build the sum over k
-    let sumTerms = [];
-    for (let k = kMin; k <= kMax; k++) {
-      const sign = (k % 2 === 0) ? '' : '-';
-      const term = `${sign}1 / (${k}! * (${j1PlusJ2MinusJ - k})! * (${j1MinusM1 - k})! * (${j2PlusM2 - k})! * (${JminusJ2PlusM1 + k})! * (${JminusJ1MinusM2 + k})!)`;
-      sumTerms.push(term);
+    if (surd.isZero()) {
+      return {
+        decimal: 0,
+        symbolic: '0',
+        latex: '0'
+      };
     }
     
-    const sumExpr = sumTerms.join(' + ').replace(/\+ -/g, '- ');
+    const decimal = surd.s * surd.p * Math.sqrt(surd.r) / surd.q;
+    const symbolic = surd.toString();
+    const latex = surd.toLatex();
     
-    // Full expression
-    // CG = sqrt((2*J+1) * Δ) * sqrt(factorial_product) * sum
-    const fullExpr = `sqrt((2*${aJ}+1) * ${triangleExpr}) * sqrt(${factorialProduct}) * (${sumExpr})`;
-    
-    // Simplify with Algebrite
-    const simplified = Algebrite.run(`simplify(${fullExpr})`);
-
-    // Get decimal value
-    const decimalStr = Algebrite.run(`float(${simplified})`);
-    const decimalVal = parseFloat(decimalStr);
-
-    // Get LaTeX form (best-effort; Algebrite's printlatex sometimes returns
-    // identical infix text — that's still usable as basic LaTeX).
-    let latex = '';
-    try {
-      latex = Algebrite.run(`printlatex(${simplified})`).trim();
-    } catch (_) {
-      latex = '';
-    }
-
     return {
-      decimal: decimalVal,
-      symbolic: simplified.trim(),
+      decimal: decimal,
+      symbolic: symbolic,
       latex: latex
     };
     
   } catch (e) {
-    return { error: `Algebrite computation error: ${e.message || e}` };
+    return { error: `Computation error: ${e.message || e}` };
   }
 }
 
@@ -543,11 +469,6 @@ function formatSymbolic(sym) {
   
   // Clean up the symbolic output
   let result = sym.trim();
-  
-  // Replace common patterns for better display
-  // Algebrite uses ^ for exponentiation, sqrt for square root
-  // We'll display it as-is in monospace
-  
   return result;
 }
 
@@ -559,8 +480,8 @@ function runSanityChecks() {
   console.log('%c=== Clebsch-Gordan Coefficient Sanity Checks ===', 'color: #06b6d4; font-weight: bold; font-size: 14px;');
   console.log('');
   
-  if (typeof Algebrite === 'undefined') {
-    console.log('%c✗ Algebrite library not loaded — cannot run tests', 'color: #ef4444; font-weight: bold;');
+  if (typeof computeCGExact === 'undefined') {
+    console.log('%c✗ computeCGExact not available — cannot run tests', 'color: #ef4444; font-weight: bold;');
     console.log('');
     return { passed: 0, failed: 1 };
   }

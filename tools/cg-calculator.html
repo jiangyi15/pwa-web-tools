@@ -336,8 +336,7 @@ where Δ(a,b,c) = (a+b−c)!(a−b+c)!(−a+b+c)! / (a+b+c+1)!
 
 Sum over k runs where all factorial arguments are ≥ 0.</div>
               <p class="formula-note">
-                Symbolic computation powered by <a href="http://algebrite.org/" target="_blank" rel="noopener" style="color: var(--accent);">Algebrite</a> — 
-                a pure JavaScript computer algebra system.
+                Computed using exact BigInt arithmetic via the Racah formula — no external dependencies required.
               </p>
             </div>
           </div>
@@ -370,7 +369,7 @@ If any rule is violated, the coefficient is zero.</div>
     </div>
   </footer>
 
-  <!-- Scripts - Algebrite must load before cg.js -->
+  <!-- Scripts -->
   <script>
     window.MathJax = {
       tex: {
@@ -384,30 +383,9 @@ If any rule is violated, the coefficient is zero.</div>
   </script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
   <script src="../assets/js/surd.js"></script>
-  <script src="../assets/vendor/algebrite.bundle-for-browser.js"></script>
   <script src="../assets/js/cg.js"></script>
   <script src="../assets/js/main.js"></script>
   <script>
-    // Check if Algebrite loaded successfully
-    document.addEventListener('DOMContentLoaded', () => {
-      if (typeof Algebrite === 'undefined') {
-        console.error('Algebrite library failed to load');
-        const resultsBody = document.getElementById('results-body');
-        resultsBody.innerHTML = `
-          <div class="result-error">
-            <strong>⚠️ Library Error</strong><br>
-            Algebrite library failed to load — calculator unavailable.<br>
-            Please ensure you are accessing this page via a web server or GitHub Pages.
-          </div>
-        `;
-        document.getElementById('status-indicator').className = 'status-indicator error';
-        document.getElementById('status-text').textContent = 'Library Load Error';
-        
-        // Disable the form
-        document.getElementById('calculate-btn').disabled = true;
-      }
-    });
-
     // DOM Elements
     const form = document.getElementById('cg-form');
     const resultsPanel = document.getElementById('results-panel');
@@ -514,12 +492,6 @@ If any rule is violated, the coefficient is zero.</div>
     });
 
     function calculate() {
-      // Check Algebrite is available
-      if (typeof Algebrite === 'undefined') {
-        showResults({ error: 'Algebrite library is not loaded — calculator unavailable.' });
-        return;
-      }
-
       const j1 = inputs.j1.value.trim();
       const m1 = inputs.m1.value.trim();
       const j2 = inputs.j2.value.trim();
