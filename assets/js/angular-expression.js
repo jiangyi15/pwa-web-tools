@@ -95,11 +95,11 @@ var AngularExpression = (function() {
           tp.addPowerTerm(coeff, !!t.im, thetaEntries, phiEntries);
         }
 
-        // |T|² = T × conj(T)
+        // |T|² = T × conj(T) — real part (im terms cancel to zero)
         var tpSq = tp.mul(tp, { conjugateSecond: true });
 
-        // Expand to Fourier basis
-        tpSq.expand();
+        // Expand to Fourier basis — keep only real-part terms
+        tpSq.expand('real');
 
         // Apply J=0 φ₁→0, φ₂→χ substitution
         if (phiCombine) {
@@ -147,11 +147,13 @@ var AngularExpression = (function() {
             var tp1 = _termsToTrigPoly(terms1);
             var tp2 = _termsToTrigPoly(terms2);
 
-            // 2 Re[T1·T2*]
+            // 2 Re[T1·T2*] — keep only real-part terms (im=true terms are
+            // the imaginary part; folding them in contaminated the map with
+            // 2·Im[T1·T2*] and produced wrong/negative distributions).
             var tpRe = tp1.mul(tp2, { conjugateSecond: true });
             // Multiply by 2 (the 2 Re factor)
             tpRe = _tpScale(tpRe, 2);
-            tpRe.expand();
+            tpRe.expand('real');
             if (phiCombine) {
               var subMap = {};
               subMap['phi_' + phiCombine.fixIdx] = null;
@@ -164,7 +166,7 @@ var AngularExpression = (function() {
             var imagResult = _tpImagCrossMul(terms1, terms2);
             if (!imagResult.isZero()) {
               imagResult = _tpScale(imagResult, 2);
-              imagResult.expand();
+              imagResult.expand('imag');
               _tpApplyPhiCombine(imagResult, phiCombine);
               _accumulateFourier(interfImagMap[pairKey].fourier, imagResult.toFourierMap());
             }
@@ -217,7 +219,7 @@ var AngularExpression = (function() {
             // 2 Re[T1·T2*]
             var tpRe = tp1.mul(tp2, { conjugateSecond: true });
             tpRe = _tpScale(tpRe, 2);
-            tpRe.expand();
+            tpRe.expand('real');
             _tpApplyPhiCombine(tpRe, phiCombine);
             _accumulateFourier(interfMap[pairKey].fourier, tpRe.toFourierMap());
 
@@ -225,7 +227,7 @@ var AngularExpression = (function() {
             var imagResult = _tpImagCrossMul(terms1, terms2);
             if (!imagResult.isZero()) {
               imagResult = _tpScale(imagResult, 2);
-              imagResult.expand();
+              imagResult.expand('imag');
               _tpApplyPhiCombine(imagResult, phiCombine);
               _accumulateFourier(interfImagMap[pairKey].fourier, imagResult.toFourierMap());
             }

@@ -408,8 +408,7 @@ with k = (l + m₂ − m₁)/2, and k ∈ [max(0, m₂−m₁), min(j−m₁, j+
 
 Otherwise w<sub>l</sub> = 0.</div>
               <p class="formula-note">
-                Symbolic computation powered by <a href="http://algebrite.org/" target="_blank" rel="noopener" style="color: var(--accent);">Algebrite</a> —
-                a pure JavaScript computer algebra system.
+                Symbolic computation powered by exact BigInt and surd arithmetic — no external CAS dependency.
               </p>
             </div>
           </div>
@@ -454,22 +453,9 @@ Otherwise w<sub>l</sub> = 0.</div>
   </script>
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
   <script src="../assets/js/surd.js"></script>
-  <script src="../assets/vendor/algebrite.bundle-for-browser.js"></script>
   <script src="../assets/js/wigner-d.js"></script>
   <script src="../assets/js/main.js"></script>
   <script>
-    // Check if Algebrite loaded
-    document.addEventListener('DOMContentLoaded', function() {
-      if (typeof Algebrite === 'undefined') {
-        console.error('Algebrite library failed to load');
-        var resultsBody = document.getElementById('results-body');
-        resultsBody.innerHTML = '<div class="result-error"><strong>⚠️ Library Error</strong><br>Algebrite library failed to load — calculator unavailable.<br>Please ensure you are accessing this page via a web server or GitHub Pages.</div>';
-        document.getElementById('status-indicator').className = 'status-indicator error';
-        document.getElementById('status-text').textContent = 'Library Load Error';
-        document.getElementById('calculate-btn').disabled = true;
-      }
-    });
-
     // DOM Elements
     var form = document.getElementById('wigner-form');
     var resultsBody = document.getElementById('results-body');
@@ -588,11 +574,6 @@ Otherwise w<sub>l</sub> = 0.</div>
     });
 
     function calculate() {
-      if (typeof Algebrite === 'undefined') {
-        showError('Algebrite library is not loaded — calculator unavailable.');
-        return;
-      }
-
       var j = inputs.j.value.trim();
       var beta = inputs.beta.value.trim();
 
@@ -670,14 +651,16 @@ Otherwise w<sub>l</sub> = 0.</div>
       statusIndicator.className = 'status-indicator success';
       statusText.textContent = 'Calculation Complete';
 
-      var decimalStr = result.decimal.toPrecision(12);
+      var decimalStr = isFinite(result.decimal) ? result.decimal.toPrecision(12) : null;
       var symbolicStr = result.symbolic || '0';
       var latexStr = (result.latex && result.latex.length) ? result.latex : symbolicStr;
 
       var betaDisplay = beta || '\\beta';
       var html = '<div class="result-item"><div class="result-label">Rendered</div><div class="latex-render" id="latex-main"></div></div>' +
-        '<div class="result-item"><div class="result-label">Symbolic Form</div><div class="symbolic-result copiable" onclick="copyValue(this)" title="Click to copy">' + symbolicStr + '</div></div>' +
-        '<div class="result-item"><div class="result-label">Decimal Value</div><div class="result-value small copiable" onclick="copyValue(this)" title="Click to copy">' + decimalStr + '</div></div>';
+        '<div class="result-item"><div class="result-label">Symbolic Form</div><div class="symbolic-result copiable" onclick="copyValue(this)" title="Click to copy">' + symbolicStr + '</div></div>';
+      if (decimalStr !== null) {
+        html += '<div class="result-item"><div class="result-label">Decimal Value</div><div class="result-value small copiable" onclick="copyValue(this)" title="Click to copy">' + decimalStr + '</div></div>';
+      }
 
       // Simplified expansion (only for symbolic beta)
       var simplifyToggle = document.getElementById('simplify-toggle');

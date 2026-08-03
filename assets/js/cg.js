@@ -25,11 +25,12 @@ function parseQuantumNumber(input) {
   // Fraction format "a/b" — parse numerator/denominator as integers
   const slashIdx = s.indexOf('/');
   if (slashIdx !== -1) {
-    const num = parseInt(s.substring(0, slashIdx), 10);
-    const den = parseInt(s.substring(slashIdx + 1), 10);
-    if (isNaN(num) || isNaN(den) || den === 0) {
+    const m = s.match(/^([+-]?\d+)\s*\/\s*([+-]?\d+)$/);
+    if (!m || parseInt(m[2], 10) === 0) {
       throw new Error(`Invalid quantum number: ${s}`);
     }
+    const num = parseInt(m[1], 10);
+    const den = parseInt(m[2], 10);
     return {
       numerator: num,
       denominator: den,
@@ -37,15 +38,31 @@ function parseQuantumNumber(input) {
     };
   }
 
-  // Integer-only
-  const n = parseInt(s, 10);
-  if (isNaN(n)) {
+  // Integer or decimal string — converted to an exact fraction
+  // (e.g. "0.5" → 1/2). NaN-safe regex, so "1.5junk" is rejected
+  // instead of being silently truncated by parseInt.
+  const dm = s.match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
+  if (!dm) {
     throw new Error(`Invalid quantum number: ${s}. Use fraction syntax e.g. "1/2" for half-integers.`);
   }
+  const neg = dm[1] === '-';
+  const intPart = parseInt(dm[2], 10);
+  if (dm[3] === undefined) {
+    return {
+      numerator: neg ? -intPart : intPart,
+      denominator: 1,
+      value: neg ? -intPart : intPart
+    };
+  }
+  let num = intPart * Math.pow(10, dm[3].length) + parseInt(dm[3], 10);
+  let den = Math.pow(10, dm[3].length);
+  const g = Surd._gcd(Math.abs(num), den);
+  num = (neg ? -num : num) / g;
+  den = den / g;
   return {
-    numerator: n,
-    denominator: 1,
-    value: n
+    numerator: num,
+    denominator: den,
+    value: num / den
   };
 }
 
@@ -60,6 +77,20 @@ function isValidQuantumNumber(parsed, allowNegative = false) {
   if (Math.abs(twiceVal - Math.round(twiceVal)) > 1e-10) return false;
   if (!allowNegative && parsed.value < 0) return false;
   return true;
+}
+
+/**
+ * Check that m is a valid projection of j: both j+m and j−m must be
+ * non-negative integers. This is equivalent to requiring m to be an
+ * integer when j is integer, and a half-integer when j is half-integer
+ * (m = −j, −j+1, …, j). Rejects e.g. m = 0 for j = 1/2.
+ */
+function _validProjectionParity(j, m) {
+  const sum = j + m;
+  const diff = j - m;
+  return sum >= -1e-10 && diff >= -1e-10 &&
+         Math.abs(sum - Math.round(sum)) < 1e-10 &&
+         Math.abs(diff - Math.round(diff)) < 1e-10;
 }
 
 // ============================================================================
@@ -115,16 +146,15 @@ function checkSelectionRules(j1, m1, j2, m2, J, M) {
   const MVal = pM.value;
   
   // Check that j1+m1, j1-m1, etc. are non-negative integers
+  // (m must have the same half-integer parity as j — i.e. m = −j,…,+j)
   const checkConsistency = (j, m, jName, mName) => {
     const sum = j + m;
     const diff = j - m;
-    const twiceSum = sum * 2;
-    const twiceDiff = diff * 2;
-    if (twiceSum < 0 || Math.abs(twiceSum - Math.round(twiceSum)) > 1e-10) {
-      return { valid: false, message: `${jName} + ${mName} = ${sum.toFixed(3)} is not a non-negative integer or half-integer` };
+    if (sum < -1e-10 || Math.abs(sum - Math.round(sum)) > 1e-10) {
+      return { valid: false, message: `${jName} + ${mName} = ${sum.toFixed(3)} is not a non-negative integer (m must be integer when j is integer, half-integer when j is half-integer)` };
     }
-    if (twiceDiff < 0 || Math.abs(twiceDiff - Math.round(twiceDiff)) > 1e-10) {
-      return { valid: false, message: `${jName} − ${mName} = ${diff.toFixed(3)} is not a non-negative integer or half-integer` };
+    if (diff < -1e-10 || Math.abs(diff - Math.round(diff)) > 1e-10) {
+      return { valid: false, message: `${jName} − ${mName} = ${diff.toFixed(3)} is not a non-negative integer (m must be integer when j is integer, half-integer when j is half-integer)` };
     }
     return { valid: true };
   };
@@ -296,6 +326,13 @@ function computeCGExact(j1, m1, j2, m2, J, M) {
   
   // Check m1 + m2 = M
   if (Math.abs(m1Val + m2Val - MVal) > 1e-10) return Surd.ZERO;
+
+  // Check that each m is a valid projection of its j: j±m must be
+  // non-negative integers (rejects e.g. m = 0 for j = 1/2, which would
+  // otherwise be silently rounded to a nonzero but wrong coefficient).
+  if (!_validProjectionParity(j1Val, m1Val)) return Surd.ZERO;
+  if (!_validProjectionParity(j2Val, m2Val)) return Surd.ZERO;
+  if (!_validProjectionParity(JVal, MVal)) return Surd.ZERO;
   
   // Compute integer values (always integers for these expressions)
   var j1pm1 = Math.round(j1Val + m1Val);
@@ -497,9 +534,9 @@ function runSanityChecks() {
     { j1: '1', m1: '1', j2: '1', m2: '-1', J: '0', M: '0', expected: 1/Math.sqrt(3), description: '⟨1 1 1 −1 | 0 0⟩' },
     { j1: '1', m1: '1', j2: '1', m2: '0', J: '2', M: '1', expected: 1/Math.sqrt(2), description: '⟨1 1 1 0 | 2 1⟩' },
     { j1: '1', m1: '0', j2: '1', m2: '0', J: '0', M: '0', expected: -1/Math.sqrt(3), description: '⟨1 0 1 0 | 0 0⟩' },
-    { j1: '3/2', m1: '1/2', j2: '1/2', m2: '1/2', J: '2', M: '1', expected: 1, description: '⟨3/2 ½ ½ ½ | 2 1⟩' },
+    { j1: '3/2', m1: '1/2', j2: '1/2', m2: '1/2', J: '2', M: '1', expected: Math.sqrt(3)/2, description: '⟨3/2 ½ ½ ½ | 2 1⟩' },
   ];
-  
+
   let passed = 0;
   let failed = 0;
   

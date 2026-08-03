@@ -25,15 +25,29 @@ function toSpin(val) {
     return { num: Math.round(val), den: 1, value: val };
   }
   if (typeof val === 'string') {
-    if (val.includes('/')) {
-      var parts = val.split('/');
-      var num = parseInt(parts[0], 10);
-      var den = parseInt(parts[1], 10);
+    var s = String(val).trim();
+    if (s.includes('/')) {
+      var m = s.match(/^([+-]?\d+)\s*\/\s*([+-]?\d+)$/);
+      if (!m || parseInt(m[2], 10) === 0) throw new Error('Invalid spin value: ' + val);
+      var num = parseInt(m[1], 10);
+      var den = parseInt(m[2], 10);
       return { num: num, den: den, value: num / den };
     }
-    var n = parseInt(val, 10);
-    if (isNaN(n)) throw new Error('Invalid spin value: ' + val);
-    return { num: n, den: 1, value: n };
+    // Integer or decimal string — convert to an exact fraction
+    // (e.g. "0.5" → 1/2). NaN-safe regex, so "1.5junk" is rejected
+    // instead of being silently truncated by parseInt.
+    var dm = s.match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
+    if (!dm) throw new Error('Invalid spin value: ' + val);
+    var neg = dm[1] === '-';
+    var intPart = parseInt(dm[2], 10);
+    if (dm[3] === undefined) {
+      return { num: neg ? -intPart : intPart, den: 1, value: neg ? -intPart : intPart };
+    }
+    var denPow = Math.pow(10, dm[3].length);
+    var numFrac = intPart * denPow + parseInt(dm[3], 10);
+    var g = _gcd(numFrac, denPow);
+    numFrac = (neg ? -numFrac : numFrac) / g;
+    return { num: numFrac, den: denPow / g, value: numFrac / (denPow / g) };
   }
   throw new Error('Invalid spin value: ' + val);
 }
@@ -149,64 +163,111 @@ function _sti(coeffStr, thetaIdx, sinPow, cosPow, phiIdx, phiFunc, mVal) {
 
 // --- Exact Wigner-d weight as Algebrite string ---
 // Returns array of {weightStr, sinPow, cosPow} using exact symbolic expressions.
+// Uses BigInt factorials — the old Number version silently corrupted the
+// symbolic weights for j ≥ 8 and was slow (O(√r) trial-division scan).
+
+/** BigInt gcd helper for the exact weight computation. */
+function _wignerBigGcd(a, b) {
+  a = a < 0n ? -a : a;
+  b = b < 0n ? -b : b;
+  while (b !== 0n) { var t = b; b = a % b; a = t; }
+  return a;
+}
+
+/** Trial primes up to n (n ≤ 2j, tiny). */
+function _wignerPrimesUpTo(n) {
+  var primes = [];
+  for (var i = 2; i <= n; i++) {
+    var isP = true;
+    for (var j = 0; j < primes.length && primes[j] * primes[j] <= i; j++) {
+      if (i % primes[j] === 0) { isP = false; break; }
+    }
+    if (isP) primes.push(i);
+  }
+  return primes;
+}
 
 function _getExactWignerDWeights(J, m1, m2) {
   var twoJ = Math.round(2 * J);
   var jpm1 = Math.round(J + m1), jmm1 = Math.round(J - m1);
   var jpm2 = Math.round(J + m2), jmm2 = Math.round(J - m2);
-  
-  // Numerator under sqrt: (j+m1)!(j-m1)!(j+m2)!(j-m2)!
-  var numNum = 1;
-  for (var i = 1; i <= jpm1; i++) numNum *= i;
-  for (var i = 1; i <= jmm1; i++) numNum *= i;
-  for (var i = 1; i <= jpm2; i++) numNum *= i;
-  for (var i = 1; i <= jmm2; i++) numNum *= i;
-  
+
+  // Projection parity: j±m must be non-negative integers
+  // (rejects e.g. m = 0 for j = 1/2 → no valid weights).
+  if (Math.abs((J + m1) - jpm1) > 1e-10 || Math.abs((J - m1) - jmm1) > 1e-10 ||
+      Math.abs((J + m2) - jpm2) > 1e-10 || Math.abs((J - m2) - jmm2) > 1e-10) {
+    return [];
+  }
+  if (jpm1 < 0 || jmm1 < 0 || jpm2 < 0 || jmm2 < 0) return [];
+
+  // BigInt factorials
+  var maxN = Math.max(jpm1, jmm1, jpm2, jmm2, twoJ + 2, 1);
+  var facts = [1n];
+  for (var i = 1; i <= maxN; i++) facts[i] = facts[i - 1] * BigInt(i);
+
+  // Numerator under sqrt: (j+m1)! (j-m1)! (j+m2)! (j-m2)! — exact BigInt.
+  // All its prime factors are ≤ maxN, so trial division over primes up
+  // to maxN factors it fully (also replaces the slow O(√r) Number scan).
+  var numNum = facts[jpm1] * facts[jmm1] * facts[jpm2] * facts[jmm2];
+  var primes = _wignerPrimesUpTo(maxN);
+  var outside = 1n, radicand = 1, temp = numNum;
+  for (var pi = 0; pi < primes.length; pi++) {
+    var p = primes[pi];
+    var pBig = BigInt(p);
+    if (pBig > temp) break;
+    var exp = 0;
+    while (temp % pBig === 0n) { temp = temp / pBig; exp++; }
+    if (exp > 0) {
+      var pairs = Math.floor(exp / 2);
+      for (var ii = 0; ii < pairs; ii++) outside *= pBig;
+      if (exp % 2 === 1) radicand *= p;
+    }
+  }
+
   var weights = [];
-  
+
   for (var l = 0; l <= twoJ; l++) {
     var k = (l + m2 - m1) / 2;
     if (Math.abs(k - Math.round(k)) > 1e-10) continue;
     k = Math.round(k);
     if (k < Math.max(0, m2 - m1)) continue;
     if (k > Math.min(jmm1, jpm2)) continue;
-    
+
     var sign = ((Math.round(m1 - m2) + k) % 2 === 0) ? '' : '-';
-    
-    // Denominator product
-    var denom = 1;
-    if (jmm1 - k >= 0) { for (var i = 1; i <= jmm1-k; i++) denom *= i; }
-    if (jpm2 - k >= 0) { for (var i = 1; i <= jpm2-k; i++) denom *= i; }
-    if (Math.round(m1-m2)+k >= 0) { for (var i = 1; i <= Math.round(m1-m2)+k; i++) denom *= i; }
-    if (k >= 0) { for (var i = 1; i <= k; i++) denom *= i; }
-    
-    // Extract perfect squares from numNum
-    var p = 1, r = numNum;
-    for (var i = 2; i * i <= r; i++) {
-      while (r % (i * i) === 0) { r /= (i * i); p *= i; }
+
+    // Denominator product — exact BigInt: (j-m1-k)!(j+m2-k)!(m1-m2+k)!·k!
+    var denomBig = facts[jmm1 - k] * facts[jpm2 - k] *
+                   facts[Math.round(m1 - m2) + k] * facts[k];
+
+    // Reduce outside/denom by gcd
+    var g = _wignerBigGcd(outside, denomBig);
+    var pRed = Number(outside / g);
+    var denom = Number(denomBig / g);
+
+    // Guard: values must fit in the exact Number range used by Surd.
+    var MAX_SAFE = Number.MAX_SAFE_INTEGER;
+    if (pRed > MAX_SAFE || denom > MAX_SAFE || radicand > MAX_SAFE) {
+      throw new Error('Wigner-d weight too large for exact representation (j=' + J + ')');
     }
-    
-    // Reduce p/denom
-    var g = _gcd(p, denom); p /= g; denom /= g;
-    
+
     // Build weight string
     var wStr;
-    if (r === 1 && p === 1 && denom === 1) wStr = '1';
-    else if (r === 1 && denom === 1) wStr = String(p);
-    else if (p === 1 && r === 1) wStr = '1/' + denom;
-    else if (p === 1 && denom === 1) wStr = 'sqrt(' + r + ')';
-    else if (denom === 1 && r === 1) wStr = String(p);
-    else if (p === 1) wStr = 'sqrt(' + r + ')/' + denom;
-    else if (denom === 1) wStr = p + '*sqrt(' + r + ')';
-    else if (r === 1) wStr = p + '/' + denom;
-    else wStr = p + '*sqrt(' + r + ')/' + denom;
-    
+    if (radicand === 1 && pRed === 1 && denom === 1) wStr = '1';
+    else if (radicand === 1 && denom === 1) wStr = String(pRed);
+    else if (pRed === 1 && radicand === 1) wStr = '1/' + denom;
+    else if (pRed === 1 && denom === 1) wStr = 'sqrt(' + radicand + ')';
+    else if (denom === 1 && radicand === 1) wStr = String(pRed);
+    else if (pRed === 1) wStr = 'sqrt(' + radicand + ')/' + denom;
+    else if (denom === 1) wStr = pRed + '*sqrt(' + radicand + ')';
+    else if (radicand === 1) wStr = pRed + '/' + denom;
+    else wStr = pRed + '*sqrt(' + radicand + ')/' + denom;
+
     if (wStr !== '1' && wStr !== '0') wStr = sign + wStr;
     else if (wStr === '1') wStr = sign + '1';
-    
+
     weights.push({ weightStr: wStr, sinPow: l, cosPow: twoJ - l });
   }
-  
+
   return weights;
 }
 

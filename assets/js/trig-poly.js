@@ -290,9 +290,13 @@ TrigPoly.prototype._addPowerTermFromMul = function (coeff, im, ta, tb) {
  * After expansion, each term has at most one factor per variable name,
  * and all factors are in {cos(k·name/2), sin(k·name/2)} form.
  *
+ * @param {string} [part]  Which power terms to expand:
+ *   - undefined/null → all terms (full polynomial, historical default)
+ *   - 'real' → only terms with im === false (real part of a complex product)
+ *   - 'imag' → only terms with im === true  (imaginary part)
  * @return {TrigPoly} this (for chaining)
  */
-TrigPoly.prototype.expand = function () {
+TrigPoly.prototype.expand = function (part) {
   if (this._fourier !== null) return this; // already expanded
   if (this._powerTerms.length === 0) {
     this._fourier = {};
@@ -303,6 +307,12 @@ TrigPoly.prototype.expand = function () {
 
   for (var ti = 0; ti < this._powerTerms.length; ti++) {
     var pt = this._powerTerms[ti];
+    // Filter by requested part: im=true terms belong to the imaginary
+    // part of a complex product and must NOT be folded into a "real"
+    // Fourier map (and vice versa). Dropping them here is exact — the
+    // Fourier map of Re[T] is a sum over its real power terms alone.
+    if (part === 'real' && pt.im) continue;
+    if (part === 'imag' && !pt.im) continue;
     this._expandOneTerm(pt);
   }
 

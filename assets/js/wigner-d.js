@@ -1,6 +1,6 @@
 /**
  * Wigner d-function Calculator
- * Uses Algebrite for exact symbolic computation
+ * Exact BigInt/surd computation — no CAS dependency
  *
  * Formula:
  *   d^{j}_{m1,m2}(beta) = sum_{l=0}^{2j} w_l^{(j,m1,m2)} * sin^l(beta/2) * cos^{2j-l}(beta/2)
@@ -22,7 +22,7 @@
 /**
  * Parse a string input to a number
  * Accepts: "1/2", "3/2", "-1/2", "0.5", "1", "2", etc.
- * Returns: {numerator, denominator, value, algebriteForm}
+ * Returns: {numerator, denominator, value}
  */
 function parseQuantumNumber(input) {
   const s = String(input).trim();
@@ -30,29 +30,44 @@ function parseQuantumNumber(input) {
   // Fraction format "a/b" — parse numerator/denominator as integers
   const slashIdx = s.indexOf('/');
   if (slashIdx !== -1) {
-    const num = parseInt(s.substring(0, slashIdx), 10);
-    const den = parseInt(s.substring(slashIdx + 1), 10);
-    if (isNaN(num) || isNaN(den) || den === 0) {
+    const m = s.match(/^([+-]?\d+)\s*\/\s*([+-]?\d+)$/);
+    if (!m || parseInt(m[2], 10) === 0) {
       throw new Error(`Invalid quantum number: ${s}`);
     }
+    const num = parseInt(m[1], 10);
+    const den = parseInt(m[2], 10);
     return {
       numerator: num,
       denominator: den,
-      value: num / den,
-      algebriteForm: `(${num}/${den})`
+      value: num / den
     };
   }
 
-  // Integer-only (no decimals — use fraction syntax for half-integers)
-  const n = parseInt(s, 10);
-  if (isNaN(n)) {
+  // Integer or decimal string — converted to an exact fraction
+  // (e.g. "0.5" → 1/2). NaN-safe regex, so "1.5junk" is rejected
+  // instead of being silently truncated by parseInt.
+  const dm = s.match(/^([+-]?)(\d+)(?:\.(\d+))?$/);
+  if (!dm) {
     throw new Error(`Invalid quantum number: ${s}. Use fraction syntax e.g. "1/2" for half-integers.`);
   }
+  const neg = dm[1] === '-';
+  const intPart = parseInt(dm[2], 10);
+  if (dm[3] === undefined) {
+    return {
+      numerator: neg ? -intPart : intPart,
+      denominator: 1,
+      value: neg ? -intPart : intPart
+    };
+  }
+  let num = intPart * Math.pow(10, dm[3].length) + parseInt(dm[3], 10);
+  let den = Math.pow(10, dm[3].length);
+  const g = _intGcd(Math.abs(num), den);
+  num = (neg ? -num : num) / g;
+  den = den / g;
   return {
-    numerator: n,
-    denominator: 1,
-    value: n,
-    algebriteForm: n < 0 ? `(${n})` : String(n)
+    numerator: num,
+    denominator: den,
+    value: num / den
   };
 }
 
@@ -74,6 +89,12 @@ function isValidQuantumNumber(parsed, allowNegative) {
 /**
  * Compute a single Wigner d-function element d^{j}_{m1,m2}(beta).
  *
+ * Uses exact BigInt/surd arithmetic (no CAS dependency):
+ *   d^j_{m1,m2}(β) = Σ_l w_l · sin^l(β/2) cos^{2j−l}(β/2)
+ * with exact weights from _getExactWignerDWeights(), each sin^a cos^b
+ * term expanded via expandHalfAngleBasis() into the exact Fourier basis
+ * {cos(kβ/2), sin(kβ/2), 1} and combined with SurdSum.
+ *
  * @param {string} jStr - angular momentum j (e.g. "1/2", "1", "3/2")
  * @param {string} m1Str - projection m1
  * @param {string} m2Str - projection m2
@@ -81,10 +102,6 @@ function isValidQuantumNumber(parsed, allowNegative) {
  * @returns {{decimal: number, symbolic: string, latex: string, error: string}}
  */
 function computeWignerD(jStr, m1Str, m2Str, betaStr) {
-  if (typeof Algebrite === 'undefined') {
-    return { error: 'Algebrite library is not loaded. Cannot perform calculation.' };
-  }
-
   // Parse inputs
   var pj, pm1, pm2;
   try {
@@ -118,103 +135,34 @@ function computeWignerD(jStr, m1Str, m2Str, betaStr) {
     return { error: '|m2| <= j violated: |' + m2Val + '| > ' + jVal };
   }
 
-  // Check j +/- m are integers
-  var jPlusM1 = Math.round(jVal + m1Val);
-  var jMinusM1 = Math.round(jVal - m1Val);
-  var jPlusM2 = Math.round(jVal + m2Val);
-  var jMinusM2 = Math.round(jVal - m2Val);
-
-  if (Math.abs((jVal + m1Val) - jPlusM1) > 1e-10) {
-    return { error: 'j + m1 = ' + (jVal + m1Val) + ' is not an integer' };
-  }
-  if (Math.abs((jVal + m2Val) - jPlusM2) > 1e-10) {
-    return { error: 'j + m2 = ' + (jVal + m2Val) + ' is not an integer' };
+  // j±m must be integers (m must share j's half-integer parity)
+  if (Math.abs((jVal + m1Val) - Math.round(jVal + m1Val)) > 1e-10 ||
+      Math.abs((jVal + m2Val) - Math.round(jVal + m2Val)) > 1e-10) {
+    return { error: 'm1, m2 must be integer when j is integer, half-integer when j is half-integer' };
   }
 
-  // Precompute the factorial prefactor
-  // sqrt((j+m1)!(j-m1)!(j+m2)!(j-m2)!)
-  var prefactorExpr = 'sqrt((' + jPlusM1 + ')! * (' + jMinusM1 + ')! * (' + jPlusM2 + ')! * (' + jMinusM2 + ')! )';
-
-  // Build the sum over l = 0..2j
-  var twoJ = Math.round(2 * jVal);
-  var terms = [];
-
-  for (var l = 0; l <= twoJ; l++) {
-    // k = (l + m2 - m1) / 2
-    var k = (l + m2Val - m1Val) / 2;
-    var kInt = Math.round(k);
-
-    // Check if k is integer and within bounds
-    if (Math.abs(k - kInt) > 1e-10) continue;
-    if (kInt < Math.max(0, m2Val - m1Val) - 1e-10) continue;
-    if (kInt > Math.min(jMinusM1, jPlusM2) + 1e-10) continue;
-
-    // Sign: (-1)^{m1-m2+k}
-    var sign = ((Math.round(m1Val - m2Val) + kInt) % 2 === 0) ? '' : '-';
-
-    // Denominator: (j-m1-k)! (j+m2-k)! (m1-m2+k)! k!
-    var denom = '(' + (jMinusM1 - kInt) + ')! * (' + (jPlusM2 - kInt) + ')! * (' + (Math.round(m1Val - m2Val) + kInt) + ')! * (' + kInt + ')!';
-
-    // Weight w_l
-    var weightExpr = sign + prefactorExpr + ' / (' + denom + ')';
-
-    // sin^l(beta/2) * cos^{2j-l}(beta/2)
-    var sinPart, cosPart;
-    if (betaStr && betaStr.trim() !== '') {
-      // Numeric beta: evaluate sin(beta/2) and cos(beta/2)
-      sinPart = 'sin(' + betaStr + '/2)^' + l;
-      cosPart = 'cos(' + betaStr + '/2)^' + (twoJ - l);
-    } else {
-      // Symbolic beta
-      sinPart = 'sin(beta/2)^' + l;
-      cosPart = 'cos(beta/2)^' + (twoJ - l);
-    }
-
-    var termExpr = weightExpr + ' * ' + sinPart + ' * ' + cosPart;
-    terms.push(termExpr);
-  }
-
-  if (terms.length === 0) {
+  // Exact symbolic weights + half-angle Fourier expansion
+  var groups = _buildFourierGroups(jVal, m1Val, m2Val);
+  if (groups === null) {
     return { decimal: 0, symbolic: '0', latex: '0' };
   }
 
-  var sumExpr = terms.join(' + ').replace(/\+ -/g, '- ');
+  var rendered = _renderFourierGroups(groups);
 
-  try {
-    var simplified = Algebrite.run('simplify(' + sumExpr + ')');
-
-    // Get decimal value
-    var decimalStr = Algebrite.run('float(' + simplified + ')');
-    var decimalVal = parseFloat(decimalStr);
-
-    // Get LaTeX
-    var latex = '';
-    try {
-      latex = Algebrite.run('printlatex(' + simplified + ')').trim();
-    } catch (_) {
-      latex = '';
+  // Numeric beta?
+  var betaVal = NaN;
+  if (betaStr && betaStr.trim() !== '') {
+    betaVal = _evalAngle(betaStr);
+    if (isNaN(betaVal)) {
+      return { error: 'Invalid angle beta: ' + betaStr + ' (use e.g. "pi/2", "0.5")' };
     }
-
-    // If printlatex failed or returned empty, build LaTeX from symbolic
-    if (!latex) {
-      latex = simplified.trim()
-        .replace(/\*/g, ' \\cdot ')
-        .replace(/\^/g, '^{') + '}';
-    }
-
-    // Algebrite's printlatex outputs plain "cos", "sin", "beta" — fix to LaTeX commands
-    latex = latex.replace(/(?<!\\)cos/g, '\\cos');
-    latex = latex.replace(/(?<!\\)sin/g, '\\sin');
-    latex = latex.replace(/(?<!\\)beta/g, '\\beta');
-
-    return {
-      decimal: decimalVal,
-      symbolic: simplified.trim(),
-      latex: latex
-    };
-  } catch (e) {
-    return { error: 'Algebrite computation error: ' + (e.message || e) };
   }
+
+  return {
+    decimal: isNaN(betaVal) ? NaN : _evalGroupsDecimal(groups, betaVal),
+    symbolic: rendered.symbolic,
+    latex: rendered.latex
+  };
 }
 
 /**
@@ -237,10 +185,6 @@ function numberToFractionStr(val) {
 }
 
 function computeWignerDMatrix(jStr, betaStr) {
-  if (typeof Algebrite === 'undefined') {
-    return { error: 'Algebrite library is not loaded.' };
-  }
-
   var pj;
   try {
     pj = parseQuantumNumber(jStr);
@@ -282,27 +226,21 @@ function runWignerDSanityChecks() {
   console.log('%c=== Wigner d-Function Sanity Checks ===', 'color: #06b6d4; font-weight: bold; font-size: 14px;');
   console.log('');
 
-  if (typeof Algebrite === 'undefined') {
-    console.log('%c✗ Algebrite library not loaded — cannot run tests', 'color: #ef4444; font-weight: bold;');
-    console.log('');
-    return { passed: 0, failed: 1 };
-  }
-
   var tests = [
     // j=1/2: d^{1/2}_{1/2,1/2}(beta) = cos(beta/2)
-    { j: '1/2', m1: '1/2', m2: '1/2', beta: '', expectedSymbolic: 'cos(1/2*beta)', description: 'd^{1/2}_{1/2,1/2}(beta) = cos(beta/2)' },
+    { j: '1/2', m1: '1/2', m2: '1/2', beta: '', expectedSymbolic: 'cos(beta/2)', description: 'd^{1/2}_{1/2,1/2}(beta) = cos(beta/2)' },
     // j=1/2: d^{1/2}_{1/2,-1/2}(beta) = -sin(beta/2)
-    { j: '1/2', m1: '1/2', m2: '-1/2', beta: '', expectedSymbolic: '-sin(1/2*beta)', description: 'd^{1/2}_{1/2,-1/2}(beta) = -sin(beta/2)' },
+    { j: '1/2', m1: '1/2', m2: '-1/2', beta: '', expectedSymbolic: '-sin(beta/2)', description: 'd^{1/2}_{1/2,-1/2}(beta) = -sin(beta/2)' },
     // j=1/2: d^{1/2}_{-1/2,1/2}(beta) = sin(beta/2)
-    { j: '1/2', m1: '-1/2', m2: '1/2', beta: '', expectedSymbolic: 'sin(1/2*beta)', description: 'd^{1/2}_{-1/2,1/2}(beta) = sin(beta/2)' },
+    { j: '1/2', m1: '-1/2', m2: '1/2', beta: '', expectedSymbolic: 'sin(beta/2)', description: 'd^{1/2}_{-1/2,1/2}(beta) = sin(beta/2)' },
     // j=1/2: d^{1/2}_{-1/2,-1/2}(beta) = cos(beta/2)
-    { j: '1/2', m1: '-1/2', m2: '-1/2', beta: '', expectedSymbolic: 'cos(1/2*beta)', description: 'd^{1/2}_{-1/2,-1/2}(beta) = cos(beta/2)' },
-    // j=1: d^{1}_{1,1}(beta) = cos^2(beta/2)
-    { j: '1', m1: '1', m2: '1', beta: '', expectedSymbolic: 'cos(1/2*beta)^2', description: 'd^{1}_{1,1}(beta) = cos^2(beta/2)' },
-    // j=1: d^{1}_{1,0}(beta) = -1/sqrt(2) * sin(beta)
-    { j: '1', m1: '1', m2: '0', beta: '', expectedSymbolic: '-2^(1/2)*sin(1/2*beta)*cos(1/2*beta)', description: 'd^{1}_{1,0}(beta) = -sin(beta)/sqrt(2)' },
-    // j=1: d^{1}_{1,-1}(beta) = sin^2(beta/2)
-    { j: '1', m1: '1', m2: '-1', beta: '', expectedSymbolic: 'sin(1/2*beta)^2', description: 'd^{1}_{1,-1}(beta) = sin^2(beta/2)' },
+    { j: '1/2', m1: '-1/2', m2: '-1/2', beta: '', expectedSymbolic: 'cos(beta/2)', description: 'd^{1/2}_{-1/2,-1/2}(beta) = cos(beta/2)' },
+    // j=1: d^{1}_{1,1}(beta) = cos^2(beta/2) = 1/2 + 1/2 cos(beta)
+    { j: '1', m1: '1', m2: '1', beta: '', expectedSymbolic: '1/2+1/2*cos(beta)', description: 'd^{1}_{1,1}(beta) = cos^2(beta/2)' },
+    // j=1: d^{1}_{1,0}(beta) = -sin(beta)/sqrt(2)
+    { j: '1', m1: '1', m2: '0', beta: '', expectedSymbolic: '-sqrt(2)/2*sin(beta)', description: 'd^{1}_{1,0}(beta) = -sin(beta)/sqrt(2)' },
+    // j=1: d^{1}_{1,-1}(beta) = sin^2(beta/2) = 1/2 - 1/2 cos(beta)
+    { j: '1', m1: '1', m2: '-1', beta: '', expectedSymbolic: '1/2-1/2*cos(beta)', description: 'd^{1}_{1,-1}(beta) = sin^2(beta/2)' },
     // j=1: d^{1}_{0,0}(beta) = cos(beta)
     { j: '1', m1: '0', m2: '0', beta: '', expectedSymbolic: 'cos(beta)', description: 'd^{1}_{0,0}(beta) = cos(beta)' },
     // Numeric test: j=1/2, m1=1/2, m2=1/2, beta=pi -> cos(pi/2) = 0
@@ -367,7 +305,7 @@ function runWignerDSanityChecks() {
 // ============================================================================
 
 /**
- * Get raw Wigner-d terms BEFORE Algebrite simplification.
+ * Get raw Wigner-d terms.
  * Each term has the form: weight * sin^l(beta/2) * cos^{2j-l}(beta/2)
  *
  * @param {number} jVal - angular momentum (float, can be half-integer)
@@ -455,7 +393,7 @@ function _intGcd(a, b) {
 }
 
 /**
- * Format integer fraction as Algebrite-compatible string.
+ * Format integer fraction as an exact rational string.
  */
 function _fracStr(num, den) {
   if (den < 0) { num = -num; den = -den; }
@@ -488,7 +426,6 @@ function _fracStr(num, den) {
  */
 function expandHalfAngleBasis(sinPow, cosPow) {
   var a = sinPow, b = cosPow, N = a + b;
-  var facts = _factorials(N);
   var result = [];
   var aMod4 = a % 4;
   
@@ -502,8 +439,8 @@ function expandHalfAngleBasis(sinPow, cosPow) {
     for (var p = pMin; p <= pMax; p++) {
       var q = r - p;
       sm += ((a - p) % 2 === 0 ? 1 : -1)
-          * _binom(a, p, facts)
-          * _binom(b, q, facts);
+          * _binom(a, p)
+          * _binom(b, q);
     }
     if (sm === 0) continue;
     
@@ -525,37 +462,98 @@ function expandHalfAngleBasis(sinPow, cosPow) {
   return result;
 }
 
-function _binom(n, k, facts) {
+/**
+ * Exact binomial coefficient via BigInt factorials.
+ * The old Number-based version silently corrupted n! for n ≥ 19 (2⁵³
+ * overflow), breaking the "exact" half-angle expansion at j ≥ 10.
+ */
+var _factCacheBig = [1n];
+function _factorialsBig(n) {
+  for (var i = _factCacheBig.length; i <= n; i++) {
+    _factCacheBig[i] = _factCacheBig[i - 1] * BigInt(i);
+  }
+  return _factCacheBig;
+}
+
+function _binom(n, k) {
   if (k < 0 || k > n) return 0;
-  if (!facts) facts = _factorials(n);
-  return Math.round(facts[n] / (facts[k] * facts[n - k]));
+  var facts = _factorialsBig(n);
+  var b = facts[n] / (facts[k] * facts[n - k]);
+  // b ≤ binom(n,k); within the safe integer range this conversion is
+  // exact. Beyond 2⁵³ it rounds to the nearest double (best effort).
+  return Number(b);
 }
 
 // ============================================================================
 // EXACT WIGNER-d WEIGHTS (symbolic strings, no floats)
 // ============================================================================
 
+/** BigInt gcd helper for the exact weight computation. */
+function _wignerBigGcd(a, b) {
+  a = a < 0n ? -a : a;
+  b = b < 0n ? -b : b;
+  while (b !== 0n) { var t = b; b = a % b; a = t; }
+  return a;
+}
+
+/** Sieve-free trial primes up to n (n ≤ 2j, tiny). */
+function _wignerPrimesUpTo(n) {
+  var primes = [];
+  for (var i = 2; i <= n; i++) {
+    var isP = true;
+    for (var j = 0; j < primes.length && primes[j] * primes[j] <= i; j++) {
+      if (i % primes[j] === 0) { isP = false; break; }
+    }
+    if (isP) primes.push(i);
+  }
+  return primes;
+}
+
 /**
  * Compute exact Wigner-d weight strings for a given (j,m1,m2).
  * Each entry: {weightStr, sinPow, cosPow}
  * Adapted for standalone use from get-angle.js.
+ *
+ * Uses BigInt factorials — the old Number version silently corrupted
+ * the symbolic weights for j ≥ 8 (e.g. d⁸₈₈(β) = cos¹⁶(β/2) came out as
+ * a giant spurious radicand instead of the weight 1).
  */
 function _getExactWignerDWeights(J, m1, m2) {
   var twoJ = Math.round(2 * J);
   var jpm1 = Math.round(J + m1), jmm1 = Math.round(J - m1);
   var jpm2 = Math.round(J + m2), jmm2 = Math.round(J - m2);
 
-  // Precompute factorials
-  var maxN = Math.max(jpm1, jmm1, jpm2, jmm2, twoJ + 2, 10);
-  var facts = [1];
-  for (var i = 1; i <= maxN; i++) facts[i] = facts[i-1] * i;
+  // Projection parity: j±m must be non-negative integers
+  // (rejects e.g. m = 0 for j = 1/2 → no valid weights).
+  if (Math.abs((J + m1) - jpm1) > 1e-10 || Math.abs((J - m1) - jmm1) > 1e-10 ||
+      Math.abs((J + m2) - jpm2) > 1e-10 || Math.abs((J - m2) - jmm2) > 1e-10) {
+    return [];
+  }
+  if (jpm1 < 0 || jmm1 < 0 || jpm2 < 0 || jmm2 < 0) return [];
 
-  // Numerator product under sqrt: (j+m1)! (j-m1)! (j+m2)! (j-m2)!
-  var numNum = 1;
-  for (var i = 1; i <= jpm1; i++) numNum *= i;
-  for (var i = 1; i <= jmm1; i++) numNum *= i;
-  for (var i = 1; i <= jpm2; i++) numNum *= i;
-  for (var i = 1; i <= jmm2; i++) numNum *= i;
+  // BigInt factorials
+  var maxN = Math.max(jpm1, jmm1, jpm2, jmm2, twoJ + 2, 1);
+  var facts = [1n];
+  for (var i = 1; i <= maxN; i++) facts[i] = facts[i - 1] * BigInt(i);
+
+  // Numerator under sqrt: (j+m1)! (j-m1)! (j+m2)! (j-m2)! — exact BigInt.
+  // All its prime factors are ≤ maxN, so trial division over primes up
+  // to maxN factors it fully (also replaces the slow O(√r) Number scan).
+  var numNum = facts[jpm1] * facts[jmm1] * facts[jpm2] * facts[jmm2];
+  var primes = _wignerPrimesUpTo(maxN);
+  var outside = 1n, radicand = 1, temp = numNum;
+  for (var pi = 0; pi < primes.length; pi++) {
+    var p = primes[pi];
+    var pBig = BigInt(p);
+    if (pBig > temp) break;
+    var exp = 0;
+    while (temp % pBig === 0n) { temp = temp / pBig; exp++; }
+    if (exp > 0) {
+      var pairs = Math.floor(exp / 2);
+      for (var ii = 0; ii < pairs; ii++) outside *= pBig;
+      if (exp % 2 === 1) radicand *= p;
+    }
+  }
 
   var weights = [];
   for (var l = 0; l <= twoJ; l++) {
@@ -567,33 +565,32 @@ function _getExactWignerDWeights(J, m1, m2) {
 
     var sign = ((Math.round(m1 - m2) + k) % 2 === 0) ? '' : '-';
 
-    // Denominator product
-    var denom = 1;
-    if (jmm1 - k >= 0) { for (var i = 1; i <= jmm1 - k; i++) denom *= i; }
-    if (jpm2 - k >= 0) { for (var i = 1; i <= jpm2 - k; i++) denom *= i; }
-    if (Math.round(m1 - m2) + k >= 0) { for (var i = 1; i <= Math.round(m1 - m2) + k; i++) denom *= i; }
-    if (k >= 0) { for (var i = 1; i <= k; i++) denom *= i; }
+    // Denominator product — exact BigInt: (j-m1-k)!(j+m2-k)!(m1-m2+k)!·k!
+    var denomBig = facts[jmm1 - k] * facts[jpm2 - k] *
+                   facts[Math.round(m1 - m2) + k] * facts[k];
 
-    // Extract perfect squares from numNum
-    var p = 1, r = numNum;
-    for (var i = 2; i * i <= r; i++) {
-      while (r % (i * i) === 0) { r /= (i * i); p *= i; }
+    // Reduce outside/denom by gcd
+    var g = _wignerBigGcd(outside, denomBig);
+    var p = Number(outside / g);
+    var denom = Number(denomBig / g);
+
+    // Guard: values must fit in the exact Number range used by Surd.
+    var MAX_SAFE = Number.MAX_SAFE_INTEGER;
+    if (p > MAX_SAFE || denom > MAX_SAFE || radicand > MAX_SAFE) {
+      throw new Error('Wigner-d weight too large for exact representation (j=' + J + ')');
     }
-
-    // Reduce p/denom
-    var g = _intGcd(p, denom); p /= g; denom /= g;
 
     // Build weight string
     var wStr;
-    if (r === 1 && p === 1 && denom === 1) wStr = '1';
-    else if (r === 1 && denom === 1) wStr = String(p);
-    else if (p === 1 && r === 1) wStr = '1/' + denom;
-    else if (p === 1 && denom === 1) wStr = 'sqrt(' + r + ')';
-    else if (denom === 1 && r === 1) wStr = String(p);
-    else if (p === 1) wStr = 'sqrt(' + r + ')/' + denom;
-    else if (denom === 1) wStr = p + '*sqrt(' + r + ')';
-    else if (r === 1) wStr = p + '/' + denom;
-    else wStr = p + '*sqrt(' + r + ')/' + denom;
+    if (radicand === 1 && p === 1 && denom === 1) wStr = '1';
+    else if (radicand === 1 && denom === 1) wStr = String(p);
+    else if (p === 1 && radicand === 1) wStr = '1/' + denom;
+    else if (p === 1 && denom === 1) wStr = 'sqrt(' + radicand + ')';
+    else if (denom === 1 && radicand === 1) wStr = String(p);
+    else if (p === 1) wStr = 'sqrt(' + radicand + ')/' + denom;
+    else if (denom === 1) wStr = p + '*sqrt(' + radicand + ')';
+    else if (radicand === 1) wStr = p + '/' + denom;
+    else wStr = p + '*sqrt(' + radicand + ')/' + denom;
 
     if (wStr !== '1' && wStr !== '0') wStr = sign + wStr;
     else if (wStr === '1') wStr = sign + '1';
@@ -608,12 +605,195 @@ function _getExactWignerDWeights(J, m1, m2) {
 // ============================================================================
 
 /**
+ * Build the exact Fourier expansion of d^{j}_{m1,m2}(β):
+ *   Σ_l w_l · sin^l(β/2) cos^{2j−l}(β/2) = Σ_g c_g · func_g(k_g·β/2)
+ *
+ * Exact weights (BigInt) are expanded via expandHalfAngleBasis() and each
+ * {cos(kβ/2), sin(kβ/2), 1} coefficient combined with SurdSum — no floats,
+ * no CAS. Replaces the Algebrite simplify() step.
+ *
+ * @param {number} jVal - angular momentum (integer or half-integer)
+ * @param {number} m1Val, m2Val - projections
+ * @returns {Array<{func: string, k: number, sum: SurdSum}>|null}
+ *          null when the element is identically zero.
+ */
+function _buildFourierGroups(jVal, m1Val, m2Val) {
+  var weights = _getExactWignerDWeights(jVal, m1Val, m2Val);
+  if (weights.length === 0) return null;
+
+  var map = {}; // "func_k" -> SurdSum
+  for (var w = 0; w < weights.length; w++) {
+    var wt = weights[w];
+    var expansion = expandHalfAngleBasis(wt.sinPow, wt.cosPow);
+    var wSurd = Surd.parse(wt.weightStr);
+    for (var e = 0; e < expansion.length; e++) {
+      var ex = expansion[e];
+      if (ex.s === '0') continue;
+      var key = ex.func + '_' + ex.k;
+      if (!map[key]) map[key] = new SurdSum();
+      map[key].add(Surd.mul(wSurd, Surd.parse(ex.s)));
+    }
+  }
+
+  // Deterministic order: constant first, then ascending k, then func.
+  var keys = Object.keys(map).sort(function(a, b) {
+    var pa = a.split('_'), pb = b.split('_');
+    if (pa[0] === '1' && pb[0] !== '1') return -1;
+    if (pa[0] !== '1' && pb[0] === '1') return 1;
+    var ka = parseInt(pa[1], 10), kb = parseInt(pb[1], 10);
+    if (ka !== kb) return ka - kb;
+    return pa[0] < pb[0] ? -1 : 1;
+  });
+
+  var groups = [];
+  for (var i = 0; i < keys.length; i++) {
+    var sum = map[keys[i]];
+    if (sum.isEmpty()) continue;
+    var kk = keys[i].split('_');
+    groups.push({ func: kk[0], k: parseInt(kk[1], 10), sum: sum });
+  }
+  return groups.length === 0 ? null : groups;
+}
+
+/** Numeric value of a SurdSum (exact coefficients → float evaluation). */
+function _surSumFloat(sum) {
+  var total = 0;
+  var terms = sum.terms();
+  for (var i = 0; i < terms.length; i++) {
+    var t = terms[i];
+    total += t.s * t.p * Math.sqrt(t.r) / t.q;
+  }
+  return total;
+}
+
+/** Evaluate the Fourier expansion at a numeric angle beta. */
+function _evalGroupsDecimal(groups, beta) {
+  var total = 0;
+  for (var i = 0; i < groups.length; i++) {
+    var g = groups[i];
+    if (g.sum.isEmpty()) continue;
+    var c = _surSumFloat(g.sum);
+    if (g.func === '1') total += c;
+    else total += c * (g.func === 'cos' ? Math.cos(g.k * beta / 2) : Math.sin(g.k * beta / 2));
+  }
+  return total;
+}
+
+/** Symbolic trig factor for Fourier mode k: "cos(beta/2)", "cos(beta)", "sin(3/2*beta)". */
+function _fourierSymTrig(func, k) {
+  if (k === 1) return func + '(beta/2)';
+  if (k % 2 === 0) {
+    var n = k / 2;
+    return func + '(' + (n === 1 ? '' : String(n) + '*') + 'beta)';
+  }
+  return func + '(' + k + '/2*beta)';
+}
+
+/** LaTeX trig factor for Fourier mode k. */
+function _fourierTexTrig(func, k) {
+  var f = (func === 'cos') ? '\\cos' : '\\sin';
+  if (k === 1) return f + '\\left(\\frac{\\beta}{2}\\right)';
+  if (k % 2 === 0) {
+    var n = k / 2;
+    return f + '(' + (n === 1 ? '' : String(n)) + '\\beta)';
+  }
+  return f + '\\left(\\frac{' + k + '}{2}\\beta\\right)';
+}
+
+/**
+ * Render exact Fourier groups to symbolic and LaTeX strings.
+ * Replaces Algebrite's simplify()/printlatex() for the Wigner-d output.
+ */
+function _renderFourierGroups(groups) {
+  var symParts = [], texParts = [];
+  for (var i = 0; i < groups.length; i++) {
+    var g = groups[i];
+    if (g.sum.isEmpty()) continue;
+    var symCoeff = g.sum.toString();
+    if (symCoeff === '0') continue;
+    var texCoeff = g.sum.toLatex();
+    if (g.func === '1') {
+      symParts.push(symCoeff);
+      texParts.push(texCoeff);
+    } else {
+      var symTrig = _fourierSymTrig(g.func, g.k);
+      var texTrig = _fourierTexTrig(g.func, g.k);
+      if (symCoeff === '1') symParts.push(symTrig);
+      else if (symCoeff === '-1') symParts.push('-' + symTrig);
+      else symParts.push(symCoeff + '*' + symTrig);
+
+      if (texCoeff === '1') texParts.push(texTrig);
+      else if (texCoeff === '-1') texParts.push('-' + texTrig);
+      else texParts.push(texCoeff + '\\,' + texTrig);
+    }
+  }
+  if (symParts.length === 0) return { symbolic: '0', latex: '0' };
+  return {
+    symbolic: symParts.join('+').replace(/\+-/g, '-'),
+    latex: texParts.join('+').replace(/\+-/g, '-')
+  };
+}
+
+/**
+ * Evaluate a user-provided angle string: "pi/2", "0.5", "2*pi/3", "1.2", "-pi/4".
+ * Safe recursive-descent parser — only digits, + - * / ( ) and "pi" are
+ * accepted; no eval/Function. Returns NaN for anything else.
+ */
+function _evalAngle(betaStr) {
+  var s = String(betaStr).trim().toLowerCase().replace(/\s+/g, '');
+  if (!/^[0-9+\-*/().pi]*$/.test(s)) return NaN;
+
+  var i = 0;
+  function peek() { return s[i]; }
+  function parseExpr() {
+    var v = parseTerm();
+    while (peek() === '+' || peek() === '-') {
+      var op = peek(); i++;
+      var r = parseTerm();
+      v = (op === '+') ? v + r : v - r;
+    }
+    return v;
+  }
+  function parseTerm() {
+    var v = parseFactor();
+    while (peek() === '*' || peek() === '/') {
+      var op = peek(); i++;
+      var r = parseFactor();
+      v = (op === '*') ? v * r : v / r;
+    }
+    return v;
+  }
+  function parseFactor() {
+    var c = peek();
+    if (c === '-' || c === '+') { i++; var v = parseFactor(); return (c === '-') ? -v : v; }
+    if (c === '(') {
+      i++;
+      var v = parseExpr();
+      if (peek() === ')') i++;
+      return v;
+    }
+    if (c === 'p') {
+      if (s.substr(i, 2) === 'pi') { i += 2; return Math.PI; }
+      return NaN;
+    }
+    var m = /^[0-9]+(\.[0-9]+)?/.exec(s.substr(i));
+    if (!m) return NaN;
+    i += m[0].length;
+    return parseFloat(m[0]);
+  }
+
+  var result = parseExpr();
+  return (i >= s.length && isFinite(result)) ? result : NaN;
+}
+
+/**
  * Compute Wigner d-function using the half-angle Fourier expansion,
  * producing a simplified expression in the {cos(kθ/2), sin(kθ/2)} basis.
  *
  * Uses the exact formula:
  *   d^j_{m1,m2}(β) = Σ_l w_l · sin^l(β/2) cos^{2j-l}(β/2)
- * where each sin^a cos^b term is expanded via expandHalfAngleBasis().
+ * where each sin^a cos^b term is expanded via expandHalfAngleBasis() and
+ * combined exactly with SurdSum — no CAS dependency.
  *
  * @param {string} jStr
  * @param {string} m1Str
@@ -621,10 +801,6 @@ function _getExactWignerDWeights(J, m1, m2) {
  * @returns {{symbolic: string, latex: string, groups: Array, error: string}}
  */
 function computeWignerDSimplified(jStr, m1Str, m2Str) {
-  if (typeof Algebrite === 'undefined') {
-    return { error: 'Algebrite library is not loaded.' };
-  }
-
   var pj, pm1, pm2;
   try {
     pj = parseQuantumNumber(jStr);
@@ -635,107 +811,20 @@ function computeWignerDSimplified(jStr, m1Str, m2Str) {
   }
 
   var jVal = pj.value, m1Val = pm1.value, m2Val = pm2.value;
-  var twoJ = Math.round(2 * jVal);
 
-  // Get exact symbolic weights
-  var weights = _getExactWignerDWeights(jVal, m1Val, m2Val);
-  if (weights.length === 0) {
+  var groups = _buildFourierGroups(jVal, m1Val, m2Val);
+  if (groups === null) {
     return { symbolic: '0', latex: '0', groups: [] };
   }
 
-  // Build coefficient map: key "func_k" → string array of coefficient terms
-  var coeffMap = {};
-  var zeroStr = '0';
-
-  for (var w = 0; w < weights.length; w++) {
-    var wt = weights[w];
-    var expansion = expandHalfAngleBasis(wt.sinPow, wt.cosPow);
-    for (var e = 0; e < expansion.length; e++) {
-      var ex = expansion[e];
-      var key = ex.func + '_' + ex.k;
-      if (!coeffMap[key]) {
-        coeffMap[key] = { coeffStrs: [], func: ex.func, k: ex.k };
-      }
-      // Combine weight string with expansion coefficient string
-      var combined;
-      if (ex.s === '0') continue;
-      if (ex.s === '1') combined = wt.weightStr;
-      else if (ex.s === '-1') combined = '-(' + wt.weightStr + ')';
-      else combined = '(' + wt.weightStr + ')*(' + ex.s + ')';
-      coeffMap[key].coeffStrs.push(combined);
-    }
-  }
-
-  // Simplify each group coefficient and build expression
-  var terms = [];
-  var groups = [];
-
-  for (var key in coeffMap) {
-    var grp = coeffMap[key];
-    var func = grp.func;
-    var k = grp.k;
-    var coeffStrs = grp.coeffStrs;
-
-    // Sum all coefficient contributions
-    var sumStr;
-    if (coeffStrs.length === 0) continue;
-    if (coeffStrs.length === 1) sumStr = coeffStrs[0];
-    else sumStr = '(' + coeffStrs.join(')+(') + ')';
-
-    // Simplify via Algebrite
-    var simplified;
-    try {
-      simplified = Algebrite.run('simplify(' + sumStr + ')').trim();
-    } catch(e) {
-      simplified = sumStr;
-    }
-    if (simplified === '0') continue;
-
-    // For k=0 (constant), k=1 (half-angle), else full simplification
-    var trigExpr;
-    if (func === '1') {
-      trigExpr = simplified;
-    } else if (k === 1) {
-      trigExpr = simplified + '*' + func + '(beta/2)';
-    } else if (k % 2 === 0) {
-      // Even k: cos(k*beta/2) = cos((k/2)*beta) — full-angle form
-      var fullK = k / 2;
-      trigExpr = simplified + '*' + func + '(' + (fullK === 1 ? '' : fullK + '*') + 'beta)';
-    } else {
-      // Odd k: stays as half-angle
-      trigExpr = simplified + '*' + func + '((' + k + '/2)*beta)';
-    }
-
-    terms.push(trigExpr);
-    groups.push({ coeff: simplified, func: func, k: k });
-  }
-
-  if (terms.length === 0) {
-    return { symbolic: '0', latex: '0', groups: [] };
-  }
-
-  // Build symbolic expression
-  var symExpr = terms.join(' + ').replace(/\+ -/g, '- ');
-
-  // Build LaTeX via Algebrite printlatex
-  var latexExpr = symExpr;
-  try {
-    latexExpr = Algebrite.run('simplify(' + symExpr + ')').trim();
-    // Expand (only helps when there are nested products)
-    latexExpr = Algebrite.run('expand(' + latexExpr + ')').trim();
-    latexExpr = Algebrite.run('printlatex(' + latexExpr + ')').trim();
-    // Fix LaTeX commands
-    latexExpr = latexExpr.replace(/(?<!\\)cos/g, '\\cos');
-    latexExpr = latexExpr.replace(/(?<!\\)sin/g, '\\sin');
-    latexExpr = latexExpr.replace(/(?<!\\)beta/g, '\\beta');
-  } catch(e) {
-    latexExpr = symExpr;
-  }
+  var rendered = _renderFourierGroups(groups);
 
   return {
-    symbolic: symExpr,
-    latex: latexExpr,
-    groups: groups
+    symbolic: rendered.symbolic,
+    latex: rendered.latex,
+    groups: groups.map(function(g) {
+      return { coeff: g.sum.toString(), func: g.func, k: g.k };
+    })
   };
 }
 
@@ -748,6 +837,8 @@ if (typeof module !== 'undefined' && module.exports) {
     runWignerDSanityChecks: runWignerDSanityChecks,
     getWignerDTerms: getWignerDTerms,
     expandHalfAngleBasis: expandHalfAngleBasis,
-    computeWignerDSimplified: computeWignerDSimplified
+    computeWignerDSimplified: computeWignerDSimplified,
+    parseQuantumNumber: parseQuantumNumber,
+    _getExactWignerDWeights: _getExactWignerDWeights
   };
 }
