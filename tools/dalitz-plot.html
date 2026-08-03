@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Dalitz Plot Calculator - isobar-model intensity in (s12, s23) with Breit-Wigner and partial waves.">
+  <title>Dalitz Plot Calculator | Partial Wave Analysis Tools</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+  <style>
+    .input-section {
+      margin-bottom: 1rem;
+    }
+    .input-section-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 1px solid var(--border);
+    }
+    /* Decay tree (same as Angular Projection tool) */
+    .decay-tree {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 1rem;
+    }
+    .tree-node {
+      margin: 0.5rem 0;
+      padding-left: 1.5rem;
+      border-left: 2px solid var(--border);
+    }
+    .tree-node:first-child {
+      margin-top: 0;
+    }
+    .node-content {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.25rem 0;
+      flex-wrap: wrap;
+    }
+    .node-label {
+      font-weight: 500;
+      color: var(--text-primary);
+      min-width: 4rem;
+    }
+    .node-angle {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      background: rgba(99, 102, 241, 0.1);
+      padding: 0.125rem 0.4rem;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+    .node-final {
+      color: var(--success);
+      font-size: 0.75rem;
+      padding: 0.125rem 0.375rem;
+      background: rgba(16, 185, 129, 0.1);
+      border-radius: 3px;
+    }
+    .node-decays {
+      color: var(--accent);
+      font-size: 0.75rem;
+      padding: 0.125rem 0.375rem;
+      background: rgba(6, 182, 212, 0.1);
+      border-radius: 3px;
+    }
+    .j-input, .m-input, .hel-input {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      border-radius: 3px;
+      padding: 0.2rem 0.3rem;
+      text-align: center;
+    }
+    .j-input { width: 2.6rem; }
+    .m-input { width: 4.5rem; }
+    .hel-input { width: 2.8rem; }
+    .node-param {
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+    }
+    /* LS selector (same as Angular Projection tool) */
+    .ls-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+    .ls-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.7rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .ls-option:hover {
+      border-color: var(--accent);
+      color: var(--text-primary);
+    }
+    .ls-option.selected {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .ls-option input[type="radio"] {
+      accent-color: var(--accent);
+    }
+    .form-row {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .form-row .form-input {
+      max-width: 6rem;
+    }
+    .form-row select.form-input {
+      max-width: 9rem;
+    }
+    .form-row label {
+      min-width: 7.5rem;
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+    }
+    .plot-wrap {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .plot-wrap canvas {
+      width: 100%;
+      display: block;
+      border-radius: 4px;
+      background: #1e1e2e;   /* dark even before the first draw */
+    }
+    .plot-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+    .plot-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 768px) {
+      .plot-row {
+        grid-template-columns: 1fr;
+      }
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .summary-item {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.6rem 0.75rem;
+    }
+    .summary-item .k {
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      display: block;
+    }
+    .summary-item .v {
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      color: var(--text-primary);
+    }
+    /* Range sliders for the resonance mass/width */
+    input[type="range"].slider {
+      flex: 1;
+      min-width: 8rem;
+      max-width: 12rem;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(99, 102, 241, 0.35);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"].slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--bg-primary);
+      cursor: pointer;
+    }
+    input[type="range"].slider::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 2px solid var(--bg-primary);
+      cursor: pointer;
+    }
+    .slider-val {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--text-primary);
+      min-width: 3.5rem;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="../index.html" class="back-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back to Tools
+        </a>
+        <a href="../index.html" class="logo">
+          <div class="logo-icon">⚛</div>
+          <span>Partial Wave Analysis Tools</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="calc-page">
+    <div class="container">
+      <div class="calc-header">
+        <h1 class="calc-title">Dalitz Plot Calculator</h1>
+        <p class="calc-subtitle">
+          Isobar-model intensity I(s₁₂, s₂₃) = |BW|² · (q/m<sub>R</sub>)<sup>2L</sup> · F<sub>L</sub>² · W(cos θ)
+          for the resonance vertex R → 2 + 3 in a single (L, S) partial wave
+        </p>
+      </div>
+
+      <div class="calc-grid">
+        <div>
+          <!-- Decay tree card (same input as the Angular Projection tool) -->
+          <div class="calc-card">
+            <div class="calc-card-header">
+              <span class="calc-card-icon">🌳</span>
+              <h3 class="calc-card-title">Decay Tree</h3>
+            </div>
+            <div class="calc-card-body">
+              <div class="input-section">
+                <div class="input-section-title">Build Decay Structure</div>
+                <p class="form-hint" style="margin-bottom: 0.5rem;">
+                  Set parent spin, then add children. For the Dalitz plot the structure is fixed:
+                  A → R + 1, R → 2 + 3. The parent A decays to the <strong>resonance</strong> R (which
+                  decays to two final particles 2 + 3) and the spectator 1. Each node has a
+                  spin J and a mass m input.
+                </p>
+                <div id="decay-tree-container" class="decay-tree">
+                  <!-- Tree will be rendered here -->
+                </div>
+              </div>
+
+              <div class="btn-group">
+                <button type="button" class="btn btn-primary" id="calculate-btn">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M12 6v6l4 2"></path>
+                  </svg>
+                  Plot Dalitz
+                </button>
+                <button type="button" class="btn btn-secondary" id="reset-btn">Reset</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Breit-Wigner card -->
+          <div class="calc-card">
+            <div class="calc-card-header">
+              <span class="calc-card-icon">📈</span>
+              <h3 class="calc-card-title">Breit-Wigner &amp; Plot</h3>
+            </div>
+            <div class="calc-card-body">
+              <div class="form-row">
+                <label for="mR-slider">Resonance mass m<sub>R</sub></label>
+                <input type="range" class="slider" id="mR-slider" min="0.2" max="1.0" step="0.001" value="0.775">
+                <input type="number" class="form-input" id="mR-input" step="0.001" value="0.775" style="max-width:5rem">
+                <span style="font-size:0.75rem;color:var(--text-muted);">GeV</span>
+              </div>
+              <div class="form-row">
+                <label for="gR-slider">Resonance width Γ<sub>R</sub></label>
+                <input type="range" class="slider" id="gR-slider" min="0" max="1000" step="1" value="723">
+                <input type="number" class="form-input" id="gR-input" step="0.001" value="0.148" style="max-width:5rem">
+                <span style="font-size:0.75rem;color:var(--text-muted);">GeV</span>
+              </div>
+              <div class="form-row">
+                <label for="widthMode">Width</label>
+                <select class="form-input" id="widthMode">
+                  <option value="running" selected>Mass-dependent</option>
+                  <option value="constant">Constant</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="barrier">Barrier factors</label>
+                <select class="form-input" id="barrier">
+                  <option value="true" selected>On</option>
+                  <option value="false">Off</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="radius">Barrier radius d</label>
+                <input type="number" step="0.1" class="form-input" id="radius" value="3.0">
+                <span style="font-size:0.75rem;color:var(--text-muted);">GeV⁻¹</span>
+              </div>
+              <div class="form-row">
+                <label for="xvar">x-axis</label>
+                <select class="form-input" id="xvar">
+                  <option value="s12" selected>s₁₂ = m²(1,2)</option>
+                  <option value="s13">s₁₃ = m²(1,3)</option>
+                  <option value="s23">s₂₃ = m²(2,3)</option>
+                  <option value="costheta2">cos θ<sub>R</sub></option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="yvar">y-axis</label>
+                <select class="form-input" id="yvar">
+                  <option value="s12">s₁₂ = m²(1,2)</option>
+                  <option value="s13">s₁₃ = m²(1,3)</option>
+                  <option value="s23" selected>s₂₃ = m²(2,3)</option>
+                  <option value="costheta2">cos θ<sub>R</sub></option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label for="gridN">Grid</label>
+                <select class="form-input" id="gridN">
+                  <option value="100">100 × 80</option>
+                  <option value="140" selected>140 × 112</option>
+                  <option value="180">180 × 144</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Examples -->
+          <div class="examples-section">
+            <h4 class="examples-title">Load Examples:</h4>
+            <div class="examples-grid">
+              <button type="button" class="example-btn" data-example="rho">ρ(770) in D⁺ → π⁺π⁻π⁺</button>
+              <button type="button" class="example-btn" data-example="f0">f₀(980) S-wave</button>
+              <button type="button" class="example-btn" data-example="kstar">K*(892) in B⁰ → K⁻π⁺K⁺</button>
+              <button type="button" class="example-btn" data-example="delta">N*(1520) → Nπ (spin-½)</button>
+            </div>
+          </div>
+        </div>
+
+        <div style="min-width:0">
+          <!-- Results Panel -->
+          <div class="results-panel" id="results-panel">
+            <div class="results-header">
+              <div class="results-status">
+                <span class="status-indicator" id="status-indicator"></span>
+                <span id="status-text">Build the decay tree and click Plot Dalitz</span>
+              </div>
+            </div>
+            <div class="results-body" id="results-body">
+              <p style="color: var(--text-muted); font-size: 0.875rem;">
+                Results will appear here after calculation.
+              </p>
+            </div>
+          </div>
+
+          <!-- Formula Card -->
+          <div class="formula-section">
+            <div class="formula-card">
+              <h4 class="formula-title">Isobar-Model Formula</h4>
+              <div class="formula-content" style="font-size: 0.8125rem;">
+For the resonance vertex R → 2 + 3 in a single partial wave (L, S) with a
+Breit–Wigner propagator, the Dalitz intensity in (s₁₂, s₂₃) is:
+
+I(s₁₂, s₂₃) = |BW(m)|² · (q/m<sub>R</sub>)<sup>2L</sup> · F<sub>L</sub>(q·d)² · W(cos θ<sub>R</sub>)
+
+where:
+• s₂₃ = m²<sub>23</sub>, m = √s₂₃, and q(m) = √λ(s₂₃, m²<sub>2</sub>, m²<sub>3</sub>) / (2m)
+• W(cosθ) = Σ<sub>λ<sub>2</sub>,λ<sub>3</sub></sub>
+  |√((2L+1)/(2J<sub>R</sub>+1)) · ⟨J<sub>2</sub>λ<sub>2</sub>; J<sub>3</sub>,−λ<sub>3</sub> | S, δ⟩ ·
+  ⟨L 0; S δ | J<sub>R</sub>, δ⟩ · d<sup>J<sub>R</sub></sup><sub>λ<sub>R</sub>,δ</sub>(θ<sub>R</sub>)|², δ = λ<sub>2</sub>−λ<sub>3</sub>,
+  the φ-integrated θ₁ marginal from the same pipeline as the Angular Projection tool
+• cosθ<sub>R</sub> = (s₁₂ − m²<sub>1</sub> − m²<sub>2</sub> − 2E<sub>1</sub>*E<sub>2</sub>*)/(2|p<sub>1</sub>*|q),
+  with E<sub>1</sub>*, E<sub>2</sub>*, |p<sub>1</sub>*| in the 2+3 rest frame — θ<sub>R</sub> measured
+  from the resonance flight direction (tf-pwa helicity convention)
+• λ<sub>R</sub> = λ<sub>1</sub> ranges over the spectator helicities {−J<sub>1</sub>…+J<sub>1</sub>}
+  (helicity conservation at a spin-0 parent)
+• |BW(m)|² = 1 / [(m²<sub>R</sub> − s₂₃)² + (m<sub>R</sub> Γ(m))²] with
+  Γ(m) = Γ<sub>R</sub> (m<sub>R</sub>/m) (q/q<sub>R</sub>)<sup>2L+1</sup> [F<sub>L</sub>(q)/F<sub>L</sub>(q<sub>R</sub>)]² (mass-dependent)
+• F<sub>L</sub> = Blatt–Weisskopf barrier factor (z = q·d)
+
+With <strong>barrier factors ON</strong> the full L-dependent form factor
+(q/m<sub>R</sub>)<sup>2L</sup>·F<sub>L</sub>(q·d)² is included. With
+<strong>barrier factors OFF</strong> there is no L-dependent form factor and
+no L-dependent width factor — the line shape is a pure Breit-Wigner,
+independent of the spin/partial wave (only W(cos θ<sub>R</sub>) still carries
+the J dependence).
+
+The parent A → R + 1 enters only through the resonance-helicity set and the
+phase-space boundary. W(cosθ) is m-independent, so I factorizes into a mass
+profile times the angular distribution.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p><a href="../index.html" class="footer-link">← Back to Tools</a></p>
+    </div>
+  </footer>
+
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']]
+      },
+      options: {
+        enableMenu: true
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" async></script>
+  <script src="../assets/js/surd.js"></script>
+  <script src="../assets/js/cg.js"></script>
+  <script src="../assets/js/wigner-d.js"></script>
+  <script src="../assets/js/trig-poly.js"></script>
+  <script src="../assets/js/get-angle.js"></script>
+  <script src="../assets/js/angular-expression.js"></script>
+  <script src="../assets/js/projection.js"></script>
+  <script src="../assets/js/dalitz.js"></script>
+  <script src="../assets/js/main.js"></script>
+  <script>
+    // ══════════════════════════════════════════════════════════
+    // DECAY TREE — fixed structure A → R + 1, R → 2 + 3
+    // (same node-input style as the Angular Projection tool, but the
+    //  topology is fixed: the parent decays to the resonance R and the
+    //  spectator 1; R decays to the two final daughters 2 and 3.)
+    // ══════════════════════════════════════════════════════════
+
+    var decayTree = {
+      j: 0, m: 1.86965,
+      children: [
+        { j: 1, m: 0.77526, children: [
+          { j: 0, m: 0.13957, children: null },
+          { j: 0, m: 0.13957, children: null }
+        ]},
+        { j: 0, m: 0.13957, children: null }
+      ]
+    };
+
+    var nodeId = 0;
+
+    // Fixed labels for the A → R + 1, R → 2 + 3 topology.
+    // path: [] = A (parent), [0] = R (resonance), [1] = 1 (spectator),
+    //       [0,0] = 2, [0,1] = 3 (resonance daughters)
+    function dalitzNameMap() {
+      return {
+        '': 'A',
+        '0': 'R',
+        '1': '1',
+        '0,0': '2',
+        '0,1': '3'
+      };
+    }
+
+    function renderTree() {
+      var container = document.getElementById('decay-tree-container');
+      container.innerHTML = '';
+      nodeId = 0;
+      var angleIdx = { v: 0 };
+      var nameMap = dalitzNameMap();
+      container.appendChild(renderNode(decayTree, 'Parent', [], angleIdx, nameMap));
+    }
+
+    function renderNode(node, label, path, angleIdx, nameMap) {
+      var div = document.createElement('div');
+      div.className = 'tree-node';
+
+      var content = document.createElement('div');
+      content.className = 'node-content';
+
+      var labelEl = document.createElement('span');
+      labelEl.className = 'node-label';
+      var name = nameMap[path.join(',')] || '';
+      labelEl.textContent = name ? name + ' (' + label + ')' : label;
+      content.appendChild(labelEl);
+
+      content.appendChild(document.createTextNode('J='));
+      var jInput = document.createElement('input');
+      jInput.type = 'text';
+      jInput.className = 'j-input';
+      jInput.value = formatSpinValue(node.j);
+      jInput.dataset.path = path.join(',');
+      jInput.addEventListener('change', function () { updateNodeJ(path, this.value); });
+      content.appendChild(jInput);
+
+      content.appendChild(document.createTextNode(' m='));
+      var mInput = document.createElement('input');
+      mInput.type = 'number';
+      mInput.step = '0.1';
+      mInput.className = 'm-input';
+      mInput.value = (node.m !== undefined) ? node.m : 0.14;
+      mInput.dataset.path = path.join(',');
+      mInput.addEventListener('change', function () { updateNodeM(path, this.value); });
+      content.appendChild(mInput);
+
+      if (node.children) {
+        var angleIdxLabel = document.createElement('span');
+        angleIdxLabel.className = 'node-angle';
+        angleIdxLabel.textContent = '(θ' + angleIdx.v + ')';
+        content.appendChild(angleIdxLabel);
+        angleIdx.v++;
+      }
+
+      // Helicity filter input (for root and final particles only)
+      if (path.length === 0 || !node.children) {
+        content.appendChild(document.createTextNode(' λ='));
+        var helInput = document.createElement('input');
+        helInput.type = 'text';
+        helInput.className = 'hel-input';
+        helInput.placeholder = 'all';
+        helInput.dataset.path = path.join(',');
+        content.appendChild(helInput);
+      }
+
+      // Fixed topology badge
+      var statusEl = document.createElement('span');
+      if (node.children) {
+        statusEl.className = 'node-decays';
+        statusEl.textContent = '→ decays';
+      } else {
+        statusEl.className = 'node-final';
+        statusEl.textContent = 'final';
+      }
+      content.appendChild(statusEl);
+
+      div.appendChild(content);
+
+      if (node.children) {
+        var child0Div = renderNode(node.children[0], 'Child 1', path.concat(0), angleIdx, nameMap);
+        var child1Div = renderNode(node.children[1], 'Child 2', path.concat(1), angleIdx, nameMap);
+        div.appendChild(child0Div);
+        div.appendChild(child1Div);
+      }
+
+      return div;
+    }
+
+    function formatSpinValue(j) {
+      if (j === 0.5 || j === '1/2') return '1/2';
+      if (j === -0.5 || j === '-1/2') return '-1/2';
+      return String(j);
+    }
+
+    function getNodeByPath(path) {
+      var node = decayTree;
+      for (var i = 0; i < path.length; i++) node = node.children[path[i]];
+      return node;
+    }
+
+    function updateNodeJ(path, value) {
+      var node = getNodeByPath(path);
+      var s = toSpin(value);
+      node.j = s.value;
+      renderTree();
+    }
+
+    function updateNodeM(path, value) {
+      var node = getNodeByPath(path);
+      var v = parseFloat(value);
+      // mass ≥ 0; clamp to 1e-6 (photon/gamma) to avoid numerical problems
+      node.m = (isFinite(v) && v >= 0) ? Math.max(v, 1e-6) : node.m;
+      renderTree();
+      if (_lastWaveKey) rebuildWithWave();
+    }
+
+    // ── Extract the A → R + 1, R → 2 + 3 chain from the tree ──
+    // Particle 1 = spectator, 2 and 3 = resonance daughters.
+    // dalitz.js uses: mA = m(1), mB = m(2), mC = m(3), s12 = m²(1,2),
+    // s23 = m²(2,3) = resonance channel.
+    function extractChain() {
+      var root = decayTree;
+      if (!root.children || !root.children[0] || !root.children[1]) {
+        return { error: 'Parent A must decay to two particles: A → R + 1.' };
+      }
+      var dec = null, fin = null;
+      for (var i = 0; i < 2; i++) {
+        var k = root.children[i];
+        if (k.children) dec = k; else fin = k;
+      }
+      if (!dec) return { error: 'Exactly one child of the parent must be the resonance R (decay to 2 + 3).' };
+      if (!fin) return { error: 'One child of the parent must be the final spectator particle 1.' };
+      if (!dec.children || !dec.children[0] || !dec.children[1]) {
+        return { error: 'Resonance R must decay to two particles: R → 2 + 3.' };
+      }
+      if (dec.children[0].children || dec.children[1].children) {
+        return { error: 'For a simple Dalitz plot the resonance daughters must be final states (only two decays).' };
+      }
+      var parts = { A: root, R: dec, p1: fin, p2: dec.children[0], p3: dec.children[1] };
+      function massOf(n, def) {
+        var v = parseFloat(n.m);
+        // mass ≥ 0; clamp to 1e-6 (photon/gamma) to avoid numerical problems
+        return (isFinite(v) && v >= 0) ? Math.max(v, 1e-6) : def;
+      }
+      var cfg = {
+        mP: massOf(parts.A, 1.87), mA: massOf(parts.p1, 0.14),
+        mB: massOf(parts.p2, 0.14), mC: massOf(parts.p3, 0.14),
+        mR: massOf(parts.R, 0.78),   // only a fallback; the BW uses the mR slider
+        JP: toSpin(parts.A.j).value, JA: toSpin(parts.p1.j).value,
+        JR: toSpin(parts.R.j).value,
+        JB: toSpin(parts.p2.j).value, JC: toSpin(parts.p3.j).value
+      };
+      // The resonance mass is a BW parameter set by the slider (independent of
+      // the tree), so no mR-based phase-space check here.
+      if (cfg.mP <= cfg.mA + cfg.mB + cfg.mC) {
+        return { error: 'Invalid masses: mP − m1 ≤ m2 + m3 leaves no resonance window.' };
+      }
+      return cfg;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // CALCULATE
+    // ══════════════════════════════════════════════════════════
+
+    var statusIndicator = document.getElementById('status-indicator');
+    var statusText = document.getElementById('status-text');
+    var resultsBody = document.getElementById('results-body');
+    var _lastSession = null;
+    var _lastWaves = [];
+    var _lastWaveKey = null;
+    var _lastHelicityFilters = null;
+
+    function setStatus(cls, text) {
+      statusIndicator.className = 'status-indicator' + (cls ? ' ' + cls : '');
+      statusText.textContent = text;
+    }
+
+    function showError(msg) {
+      setStatus('error', msg);
+      resultsBody.innerHTML = '<div class="result-error"><strong>⚠️ Error</strong><br>' + msg + '</div>';
+    }
+
+    function calculate() {
+      setStatus('', 'Computing...');
+      setTimeout(function () {
+        try {
+          var cfg = extractChain();
+          if (cfg.error) { showError(cfg.error); return; }
+
+          // helicity filters from the tree λ inputs (paths are the full-chain
+          // tree paths: "" = parent A, "1" = spectator, "0,0"/"0,1" = 2 and 3)
+          var helInputs = document.querySelectorAll('.hel-input');
+          var hf = {};
+          for (var i = 0; i < helInputs.length; i++) {
+            var val = helInputs[i].value.trim();
+            if (val) hf[helInputs[i].dataset.path] = val;
+          }
+          cfg.helicityFilters = Object.keys(hf).length ? hf : null;
+          _lastHelicityFilters = cfg.helicityFilters;
+
+          // sync the resonance mass slider with the tree config
+          syncResonanceUI(cfg);
+
+          // available partial waves — same per-vertex LS as the projection tool
+          var waves = dalitzWaves(cfg.JP, cfg.JR, cfg.JB, cfg.JC, cfg.JA);
+          if (waves.length === 0) {
+            showError('No partial wave is allowed for these spins and production helicities.');
+            return;
+          }
+          _lastWaves = waves;
+
+          // render LS selector (combined per-vertex keys "l1,s1;l2,s2")
+          var html = '<div style="margin-bottom:0.75rem;">';
+          html += '<div style="font-size:0.8rem;font-weight:600;color:var(--text-primary);margin-bottom:0.4rem;">Select LS combination:</div>';
+          html += '<div class="ls-selector" id="ls-selector">';
+          for (var w = 0; w < waves.length; w++) {
+            var k = waves[w];
+            var WN = { 0: 'S', 1: 'P', 2: 'D', 3: 'F', 4: 'G' };
+            var resL = parseInt(k.split(';').pop().split(',')[0], 10);
+            html += '<label class="ls-option' + (w === 0 ? ' selected' : '') + '">';
+            html += '<input type="radio" name="ls-key" value="' + k + '"' + (w === 0 ? ' checked' : '') +
+                    ' onchange="onLSSelect(this.value)">';
+            html += '<span>(<var>l</var>,<var>s</var>) = (' + k + ') &nbsp;' +
+                    (WN[resL] || resL) + '-wave</span>';
+            html += '</label>';
+          }
+          html += '</div>';
+
+          // plot containers
+          html += '<div class="plot-wrap"><div class="plot-title" id="dalitz-title">Dalitz Plot — I(x, y)</div>' +
+                  '<canvas id="dalitz-canvas" width="560" height="430"></canvas></div>';
+          html += '<div class="plot-row">';
+          html += '<div class="plot-wrap"><div class="plot-title">Invariant Mass Spectrum — dN/dm₂₃ ∝ 2m·∫I ds₁₂ = p·q·∫I d(cosθ)</div>' +
+                  '<canvas id="mass-canvas" width="360" height="180"></canvas></div>';
+          html += '<div class="plot-wrap"><div class="plot-title">Angular Distribution W(cos θ<sub>R</sub>)</div>' +
+                  '<canvas id="ang-canvas" width="360" height="180"></canvas></div>';
+          html += '</div>';
+          html += '<div class="summary-grid" id="summary-grid"></div>';
+          html += '</div>';
+
+          resultsBody.innerHTML = html;
+          _lastSession = null;
+
+          // build the session for the selected wave and plot
+          onLSSelect(waves[0]);
+        } catch (e) {
+          showError('Computation error: ' + (e.message || e));
+        }
+      }, 10);
+    }
+
+    function onLSSelect(lsKey) {
+      _lastWaveKey = lsKey;
+      // highlight selection
+      var labels = document.querySelectorAll('.ls-option');
+      for (var i = 0; i < labels.length; i++) {
+        var input = labels[i].querySelector('input');
+        labels[i].className = 'ls-option' + (input && input.checked ? ' selected' : '');
+      }
+      rebuildWithWave();
+    }
+
+    // Rebuild the session with the current tree + sliders + BW options and
+    // re-plot. Used when the wave, sliders or options change.
+    function rebuildWithWave() {
+      if (!_lastWaveKey) return;
+      var cfg = extractChain();
+      if (cfg.error) { showError(cfg.error); return; }
+      cfg.mR = parseFloat(document.getElementById('mR-slider').value);
+      cfg.GammaR = gRFromSlider(parseFloat(document.getElementById('gR-slider').value));
+      cfg.widthMode = document.getElementById('widthMode').value;
+      cfg.barrier = document.getElementById('barrier').value === 'true';
+      cfg.radius = parseFloat(document.getElementById('radius').value) || 3.0;
+      cfg.helicityFilters = _lastHelicityFilters;
+      cfg.lsKey = _lastWaveKey;
+
+      var sess = buildDalitzSession(cfg);
+      if (sess.error) { setStatus('error', sess.error); return; }
+      _lastSession = sess;
+
+      plotAll(sess);
+      setStatus('success', 'Plot complete');
+    }
+
+    // ── Width slider: log scale 0.001 … 1.0 GeV ──
+    var GR_MIN = 0.001, GR_MAX = 1.0;
+    function gRFromSlider(idx) { return GR_MIN * Math.pow(10, 3 * idx / 1000); }
+    function sliderFromGR(w) {
+      var idx = 1000 * Math.log10(Math.max(w, GR_MIN) / GR_MIN) / 3;
+      return Math.min(1000, Math.max(0, idx));
+    }
+    function fmtWidth(w) { return String(Number(w.toPrecision(3))); }
+
+    // Sync the resonance mass slider BOUNDS with the chain: the resonance
+    // mass is a BW parameter (independent of the decay tree), so only the
+    // allowed range [m2+m3, mA−m1] is set from the tree — the value stays
+    // wherever the user put it (clamped into the new range).
+    function syncResonanceUI(cfg) {
+      var slider = document.getElementById('mR-slider');
+      var lo = cfg.mB + cfg.mC, hi = cfg.mP - cfg.mA;
+      if (hi > lo) { slider.min = lo.toFixed(4); slider.max = hi.toFixed(4); }
+      var mR = Math.min(Math.max(parseFloat(slider.value), lo), hi);
+      slider.value = mR;
+      document.getElementById('mR-input').value = mR.toFixed(4);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // PLOTTING
+    // ══════════════════════════════════════════════════════════
+
+    function heatColor(t) {
+      var stops = [[13, 8, 66], [70, 27, 128], [128, 48, 139], [197, 85, 116], [253, 192, 73]];
+      var x = Math.max(0, Math.min(1, t)) * (stops.length - 1);
+      var i = Math.floor(x), f = x - i;
+      if (i >= stops.length - 1) return stops[stops.length - 1];
+      var a = stops[i], b = stops[i + 1];
+      return [Math.round(a[0] + (b[0] - a[0]) * f), Math.round(a[1] + (b[1] - a[1]) * f), Math.round(a[2] + (b[2] - a[2]) * f)];
+    }
+
+    // Variable mapping for the chosen plot axes.
+    function mapVar(varName, s12, s13, s23, cosT) {
+      if (varName === 's12') return s12;
+      if (varName === 's13') return s13;
+      if (varName === 's23') return s23;
+      return cosT;   // 'costheta2'
+    }
+    var VAR_LABEL = {
+      s12: 's₁₂ = m²(1,2) [GeV²]',
+      s13: 's₁₃ = m²(1,3) [GeV²]',
+      s23: 's₂₃ = m²(2,3) [GeV²]',
+      costheta2: 'cos θ_R'
+    };
+
+    function plotHeatmap(canvas, sess, xVar, yVar) {
+      var W = canvas.width, H = canvas.height;
+      var ctx = canvas.getContext('2d');
+      var cfg = sess.config;
+      var NS = 280;   // samples per side over the physical (s23, cosθ) rectangle
+      var s23lo = sess.mMin * sess.mMin, s23hi = sess.mMax * sess.mMax;
+      var Ssum = cfg.mP * cfg.mP + cfg.mA * cfg.mA + cfg.mB * cfg.mB + cfg.mC * cfg.mC;
+
+      // Sample the physical (s23, cos θ_R) rectangle; the intensity only
+      // depends on these two. Map each sample into the chosen (X, Y) axes.
+      var pts = [];
+      var xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity, gmax = 0;
+      for (var js = 0; js <= NS; js++) {
+        var s23 = s23lo + (s23hi - s23lo) * js / NS;
+        var m = Math.sqrt(s23);
+        for (var jc = 0; jc <= NS; jc++) {
+          var cosT = -1 + 2 * jc / NS;
+          var v = sess.eval(m, cosT);
+          if (v <= 0) continue;
+          var s12 = dalitzS12(cfg.mP, cfg.mA, cfg.mB, cfg.mC, s23, cosT);
+          if (!isFinite(s12)) continue;
+          var s13 = Ssum - s12 - s23;
+          var X = mapVar(xVar, s12, s13, s23, cosT);
+          var Y = mapVar(yVar, s12, s13, s23, cosT);
+          if (X < xMin) xMin = X; if (X > xMax) xMax = X;
+          if (Y < yMin) yMin = Y; if (Y > yMax) yMax = Y;
+          if (v > gmax) gmax = v;
+          pts.push(X, Y, v);
+        }
+      }
+      if (pts.length === 0 || gmax <= 0) {
+        ctx.fillStyle = '#0d0842';
+        ctx.fillRect(0, 0, W, H);
+        return;
+      }
+
+      // Draw: dark background, then scatter samples with max-blend.
+      var img = ctx.createImageData(W, H);
+      var data = img.data;
+      for (var i = 0; i < data.length; i += 4) { data[i] = 13; data[i + 1] = 8; data[i + 2] = 66; data[i + 3] = 255; }
+      function px(x) { return Math.round((x - xMin) / (xMax - xMin) * (W - 1)); }
+      function py(y) { return H - 1 - Math.round((y - yMin) / (yMax - yMin) * (H - 1)); }
+      for (var k = 0; k < pts.length; k += 3) {
+        var xx = px(pts[k]), yy = py(pts[k + 1]);
+        if (xx < 0 || xx >= W || yy < 0 || yy >= H) continue;
+        var c = heatColor(pts[k + 2] / gmax);
+        var lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+        for (var dy = 0; dy <= 1; dy++) {
+          for (var dx = 0; dx <= 1; dx++) {
+            var x2 = xx + dx, y2 = yy + dy;
+            if (x2 >= W || y2 >= H) continue;
+            var idx = (y2 * W + x2) * 4;
+            var cur = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+            if (lum > cur) { data[idx] = c[0]; data[idx + 1] = c[1]; data[idx + 2] = c[2]; }
+          }
+        }
+      }
+      ctx.putImageData(img, 0, 0);
+
+      // Boundary: the images of the (s23, cosθ) rectangle edges under (X, Y).
+      // When cos θ_R is one of the axes the mapping folds (s12/s13 are not
+      // monotonic in s23 for fixed cosθ), so the rectangle-edge outline is
+      // not a valid boundary — skip it and let the region shape show itself.
+      if (xVar !== 'costheta2' && yVar !== 'costheta2') {
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1.5;
+        function traceLine(s23fn, cosfn, n) {
+          ctx.beginPath();
+          var started = false;
+          for (var t = 0; t <= n; t++) {
+            var fr = t / n;
+            var s23 = s23fn(fr), cosT = cosfn(fr);
+            var s12 = dalitzS12(cfg.mP, cfg.mA, cfg.mB, cfg.mC, s23, cosT);
+            if (!isFinite(s12)) continue;
+            var s13 = Ssum - s12 - s23;
+            var xx = px(mapVar(xVar, s12, s13, s23, cosT));
+            var yy = py(mapVar(yVar, s12, s13, s23, cosT));
+            if (!started) { ctx.moveTo(xx, yy); started = true; }
+            else ctx.lineTo(xx, yy);
+          }
+          ctx.stroke();
+        }
+        traceLine(function (fr) { return s23lo + (s23hi - s23lo) * fr; }, function () { return 1; }, 240);
+        traceLine(function (fr) { return s23lo + (s23hi - s23lo) * fr; }, function () { return -1; }, 240);
+        traceLine(function () { return s23lo; }, function (fr) { return -1 + 2 * fr; }, 120);
+        traceLine(function () { return s23hi; }, function (fr) { return -1 + 2 * fr; }, 120);
+      }
+
+      // axis labels
+      ctx.font = '12px ui-monospace, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.textAlign = 'center';
+      ctx.fillText(VAR_LABEL[xVar] + '  [' + xMin.toFixed(2) + ' – ' + xMax.toFixed(2) + ']', W / 2, H - 6);
+      ctx.save();
+      ctx.translate(10, H / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText(VAR_LABEL[yVar] + '  [' + yMin.toFixed(2) + ' – ' + yMax.toFixed(2) + ']', 0, 0);
+      ctx.restore();
+    }
+
+    function linePlot(canvas, values, xLabel, yLabel, xValues) {
+      var ctx = canvas.getContext('2d');
+      var W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#1e1e2e';
+      ctx.fillRect(0, 0, W, H);
+      var pad = { top: 10, right: 12, bottom: 22, left: 36 };
+      var pw = W - pad.left - pad.right, ph = H - pad.top - pad.bottom;
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      for (var gx = 0; gx <= 4; gx++) {
+        var xx = pad.left + pw * gx / 4;
+        ctx.beginPath(); ctx.moveTo(xx, pad.top); ctx.lineTo(xx, pad.top + ph); ctx.stroke();
+      }
+      for (var gy = 0; gy <= 4; gy++) {
+        var yy = pad.top + ph * gy / 4;
+        ctx.beginPath(); ctx.moveTo(pad.left, yy); ctx.lineTo(pad.left + pw, yy); ctx.stroke();
+      }
+      var vmax = 0;
+      for (var i = 0; i < values.length; i++) if (values[i] > vmax) vmax = values[i];
+      if (vmax <= 0) vmax = 1;
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      for (var i = 0; i < values.length; i++) {
+        var x = pad.left + pw * i / (values.length - 1);
+        var y = pad.top + ph * (1 - values[i] / vmax);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(xLabel, pad.left + pw / 2, H - 6);
+      ctx.save();
+      ctx.translate(8, pad.top + ph / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText(yLabel, 0, 0);
+      ctx.restore();
+    }
+
+    function plotMass(canvas, sess) {
+      var cfg = sess.config;
+      var N = 160;
+      var vals = [];
+      for (var i = 0; i < N; i++) {
+        var m = sess.mMin + (sess.mMax - sess.mMin) * i / (N - 1);
+        var s23 = m * m;
+        var r = dalitzS12Range(cfg.mP, cfg.mA, cfg.mB, cfg.mC, s23);
+        if (!r) { vals.push(0); continue; }
+        // Phase-space-correct projection: integrate I over the full s12 range
+        // at this m = √s23 — the s12 range width (upper−lower diff) is the
+        // flat Dalitz phase-space factor for the s23 projection. The axis is
+        // m23 (not s23), so convert with ds23→dm23: dN/dm = 2m·∫I ds12, which
+        // equals p·q·∫I d(cosθ) (p, q = two-body momenta).
+        var K = 80, sum = 0;
+        for (var k = 0; k < K; k++) {
+          var s12 = r[0] + (r[1] - r[0]) * (k + 0.5) / K;
+          var cosT = dalitzCosTheta(cfg.mP, cfg.mA, cfg.mB, cfg.mC, s12, s23);
+          if (isFinite(cosT)) sum += sess.eval(m, cosT);
+        }
+        vals.push(sum * (r[1] - r[0]) / K * (2 * m));
+      }
+      linePlot(canvas, vals,
+        'm₂₃  [' + sess.mMin.toFixed(3) + '–' + sess.mMax.toFixed(3) + ' GeV]', 'dN/dm₂₃');
+    }
+
+    function plotAngular(canvas, sess) {
+      var N = 200;
+      var vals = [];
+      for (var i = 0; i < N; i++) {
+        var cosT = -1 + 2 * i / (N - 1);
+        vals.push(sess.angular(cosT));
+      }
+      linePlot(canvas, vals, 'cos θ_R', 'W');
+    }
+
+    function plotAll(sess) {
+      var c1 = document.getElementById('dalitz-canvas');
+      var c2 = document.getElementById('mass-canvas');
+      var c3 = document.getElementById('ang-canvas');
+      if (!c1 || !c2 || !c3) return;
+      var xVar = document.getElementById('xvar').value;
+      var yVar = document.getElementById('yvar').value;
+      var tEl = document.getElementById('dalitz-title');
+      if (tEl) tEl.textContent = 'Dalitz Plot — I(' + VAR_LABEL[xVar] + ' vs ' + VAR_LABEL[yVar] + ')';
+      plotHeatmap(c1, sess, xVar, yVar);
+      plotMass(c2, sess);
+      plotAngular(c3, sess);
+      var cfg = sess.config;
+      var N = 400, mPeak = 0, vMax = -1;
+      for (var i = 0; i < N; i++) {
+        var m = sess.mMin + (sess.mMax - sess.mMin) * i / N;
+        var v = sess.mProfile(m);
+        if (v > vMax) { vMax = v; mPeak = m; }
+      }
+      var html =
+        '<div class="summary-item"><span class="k">Mass window</span><span class="v">' + sess.mMin.toFixed(3) + ' – ' + sess.mMax.toFixed(3) + ' GeV</span></div>' +
+        '<div class="summary-item"><span class="k">Profile peak</span><span class="v">' + mPeak.toFixed(4) + ' GeV</span></div>' +
+        '<div class="summary-item"><span class="k">q(m_R)</span><span class="v">' + sess.qR.toFixed(4) + ' GeV</span></div>' +
+        '<div class="summary-item"><span class="k">Width mode</span><span class="v">' + (cfg.widthMode === 'running' ? 'mass-dependent' : 'constant') + '</span></div>';
+      document.getElementById('summary-grid').innerHTML = html;
+    }
+
+    // ── Examples ──
+    var EXAMPLES = {
+      rho: {
+        tree: { j: 0, m: 1.86965, children: [
+          { j: 1, m: 0.77526, children: [
+            { j: 0, m: 0.13957, children: null },
+            { j: 0, m: 0.13957, children: null }
+          ]},
+          { j: 0, m: 0.13957, children: null }
+        ]},
+        gR: 0.1478
+      },
+      f0: {
+        tree: { j: 0, m: 1.86965, children: [
+          { j: 0, m: 0.98, children: [
+            { j: 0, m: 0.13957, children: null },
+            { j: 0, m: 0.13957, children: null }
+          ]},
+          { j: 0, m: 0.13957, children: null }
+        ]},
+        gR: 0.06
+      },
+      kstar: {
+        tree: { j: 0, m: 5.279, children: [
+          { j: 1, m: 0.8955, children: [
+            { j: 0, m: 0.49368, children: null },
+            { j: 0, m: 0.13957, children: null }
+          ]},
+          { j: 0, m: 0.49368, children: null }
+        ]},
+        gR: 0.0473
+      },
+      delta: {
+        tree: { j: 0, m: 3.1, children: [
+          { j: 1.5, m: 1.52, children: [
+            { j: 0.5, m: 0.938, children: null },
+            { j: 0, m: 0.13957, children: null }
+          ]},
+          { j: 0.5, m: 0.938, children: null }
+        ]},
+        gR: 0.11
+      }
+    };
+
+    document.querySelectorAll('.example-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var ex = EXAMPLES[btn.dataset.example];
+        if (!ex) return;
+        decayTree = ex.tree;
+        document.getElementById('gR-slider').value = sliderFromGR(ex.gR);
+        document.getElementById('gR-input').value = fmtWidth(ex.gR);
+        renderTree();
+        calculate();
+      });
+    });
+
+    // ── Events ──
+    document.getElementById('calculate-btn').addEventListener('click', calculate);
+    document.getElementById('mR-slider').addEventListener('input', function () {
+      document.getElementById('mR-input').value = parseFloat(this.value).toFixed(4);
+      if (_lastWaveKey) rebuildWithWave();
+    });
+    document.getElementById('mR-input').addEventListener('change', function () {
+      var v = parseFloat(this.value);
+      var s = document.getElementById('mR-slider');
+      if (isFinite(v)) {
+        v = Math.min(Math.max(v, parseFloat(s.min)), parseFloat(s.max));
+        s.value = v;
+        this.value = v.toFixed(4);
+        if (_lastWaveKey) rebuildWithWave();
+      } else {
+        this.value = parseFloat(s.value).toFixed(4);
+      }
+    });
+    document.getElementById('gR-slider').addEventListener('input', function () {
+      document.getElementById('gR-input').value = fmtWidth(gRFromSlider(parseFloat(this.value)));
+      if (_lastWaveKey) rebuildWithWave();
+    });
+    document.getElementById('gR-input').addEventListener('change', function () {
+      var w = parseFloat(this.value);
+      if (isFinite(w) && w >= 0) {
+        w = Math.min(Math.max(w, GR_MIN), GR_MAX);
+        document.getElementById('gR-slider').value = sliderFromGR(w);
+        this.value = fmtWidth(w);
+        if (_lastWaveKey) rebuildWithWave();
+      } else {
+        this.value = fmtWidth(gRFromSlider(parseFloat(document.getElementById('gR-slider').value)));
+      }
+    });
+    ['xvar', 'yvar'].forEach(function (id) {
+      document.getElementById(id).addEventListener('change', function () {
+        if (_lastSession) plotAll(_lastSession);
+      });
+    });
+    document.getElementById('reset-btn').addEventListener('click', function () {
+      decayTree = EXAMPLES.rho.tree;
+      document.getElementById('gR-slider').value = sliderFromGR(EXAMPLES.rho.gR);
+      document.getElementById('gR-input').value = fmtWidth(EXAMPLES.rho.gR);
+      document.getElementById('widthMode').value = 'running';
+      document.getElementById('barrier').value = 'true';
+      document.getElementById('radius').value = '3.0';
+      renderTree();
+      calculate();
+    });
+    document.addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); calculate(); }
+    });
+
+    // ── init ──
+    renderTree();
+    calculate();
+  </script>
+</body>
+</html>

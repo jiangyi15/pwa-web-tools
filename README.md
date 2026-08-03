@@ -13,6 +13,7 @@ A polished, modern static site with interactive calculators for quantum angular 
 | **Angular Formula Calculator** | Compute angular formulas for particle decay chains using helicity formalism. Supports cascade decays with exact symbolic computation of Wigner D-functions and CG coefficients. |
 | **Angular Distribution Calculator** | Compute the full angular distribution I(θ,φ) = \|T\|² for a decay chain, decomposed into per-LS intensities and 2·Re[T<sub>ls₁</sub>·T<sub>ls₂</sub>*] interference terms (real and imaginary parts) with exact symbolic output. |
 | **Angular Projection Tool** | 1D projections of the angular distribution onto each angle variable (θ or φ), unit-area normalized to a proper probability density, with formulas and plots. |
+| **Dalitz Plot Calculator** | Isobar-model Dalitz intensity I(s₁₂, s₂₃) = \|BW(m)\|²·(q/m<sub>R</sub>)<sup>2L</sup>·F<sub>L</sub>²·W(cos θ) for the chain A → R + 1, R → 2 + 3, with per-vertex LS waves (same format as the Angular Projection tool), running-width Breit-Wigner, barrier factors, and a 2D (s₁₂, s₂₃) heatmap with 1D projections. |
 | **Decay Angles 3D Viewer** | Interactive 3D visualization of particle decay angles in the helicity formalism (Three.js). |
 | **LS → Helicity Converter** | Express helicity amplitude coefficients H<sub>λ<sub>B</sub>,λ<sub>C</sub></sub> in terms of LS coupling amplitudes g<sub>l,s</sub> with exact Clebsch-Gordan coefficients. Includes parity selection (P<sub>A</sub>·P<sub>B</sub>·P<sub>C</sub> = (−1)<sup>l</sup>). |
 | **Clebsch-Gordan Coefficient Calculator** | Compute ⟨j₁ m₁ j₂ m₂ | J M⟩ coupling coefficients using the Racah formula with exact BigInt/surd arithmetic. |
@@ -110,8 +111,19 @@ The Angular Distribution and Angular Projection tools combine:
 3. **LS coupling** from `get-angle.js` — conversion between LS and helicity bases with parity selection
 4. **Trigonometric polynomial arithmetic** from `trig-poly.js` — exact multiplication/expansion in the {cos(kθ/2), sin(kφ/2)} Fourier basis, with real/imaginary parts kept separate (2·Re vs 2·Im interference terms)
 5. **Angular distributions** from `angular-expression.js` — per-LS intensity maps, interference maps, and LaTeX rendering
+6. **Projections** from `projection.js` — exact analytic θ/φ marginals (integral tables) shared by the Angular Projection and Dalitz Plot tools
 
 All coefficients are combined via `Surd` arithmetic, producing LaTeX output directly from the internal SurdSum representation — no string parsing, no regex post-processing.
+
+### Dalitz Plot
+
+The **Dalitz Plot Calculator** plots the isobar-model intensity for a resonance decay
+chain A → R + 1, R → 2 + 3 in (s₁₂, s₂₃):
+
+- I(s₁₂, s₂₃) = |BW(m)|² · (q/m<sub>R</sub>)<sup>2L</sup> · F<sub>L</sub>(q·d)² · W(cos θ<sub>R</sub>), with m = m₂₃ = √s₂₃ and θ<sub>R</sub> the resonance helicity angle
+- W(cos θ<sub>R</sub>) is the θ<sub>R</sub> marginal of the exact full-chain angular distribution, computed with the same pipeline as the Angular Projection tool (per-vertex LS keys "l₁,s₁;l₂,s₂" — parent vertex A → R + 1; resonance vertex R → 2 + 3 — with the parent production helicity weights included)
+- cos θ<sub>R</sub> follows the tf-pwa helicity convention (angle from the resonance flight direction)
+- Breit-Wigner with constant or mass-dependent width, optional Blatt–Weisskopf barrier factors, 2D (s₁₂, s₂₃) heatmap with the Dalitz boundary and 1D projections
 
 ## Project Structure
 
@@ -129,11 +141,14 @@ pwa-web-tools/
 │       ├── trig-poly.js        # Trigonometric polynomial arithmetic
 │       ├── get-angle.js        # Helicity amplitude formulas (LS coupling)
 │       ├── angular-expression.js  # Angular distributions + interference maps
+│       ├── projection.js       # Exact θ/φ projections (shared integral tables)
+│       ├── dalitz.js           # Dalitz isobar model (BW × angular distribution)
 │       └── main.js             # Shared UI bootstrap/utilities
 ├── tools/
 │   ├── get-angle-calculator.html   # Angular Formula Calculator
 │   ├── angular-distribution.html   # Angular Distribution Calculator
 │   ├── angular-projection.html     # Angular Projection Tool
+│   ├── dalitz-plot.html            # Dalitz Plot Calculator
 │   ├── decay-angles-3d.html        # Decay Angles 3D Viewer
 │   ├── ls-to-helicity.html         # LS → Helicity Converter
 │   ├── cg-calculator.html          # CG Coefficient Calculator
