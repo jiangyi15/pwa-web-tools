@@ -822,6 +822,24 @@ profile times the angular distribution.
       costheta2: 'cos θ_R'
     };
 
+    // "Nice" axis ticks: 1/2/5 × 10^n steps covering [min, max].
+    function niceTicks(min, max, n) {
+      var span = max - min;
+      if (!(span > 0)) return [min];
+      var step0 = span / n;
+      var mag = Math.pow(10, Math.floor(Math.log10(step0)));
+      var norm = step0 / mag;
+      var step = norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10;
+      step *= mag;
+      var ticks = [];
+      for (var v = Math.ceil(min / step - 1e-9) * step; v <= max + step * 1e-9; v += step) ticks.push(v);
+      return ticks;
+    }
+    function fmtTick(v) {
+      if (Math.abs(v) < 1e-12) return '0';
+      return String(Number(v.toPrecision(4)));
+    }
+
     function plotHeatmap(canvas, sess, xVar, yVar) {
       var W = canvas.width, H = canvas.height;
       var ctx = canvas.getContext('2d');
@@ -859,20 +877,22 @@ profile times the angular distribution.
       }
 
       // Draw: dark background, then scatter samples with max-blend.
+      var pad = { top: 6, right: 8, bottom: 34, left: 44 };
+      var pw = W - pad.left - pad.right, ph = H - pad.top - pad.bottom;
       var img = ctx.createImageData(W, H);
       var data = img.data;
       for (var i = 0; i < data.length; i += 4) { data[i] = 13; data[i + 1] = 8; data[i + 2] = 66; data[i + 3] = 255; }
-      function px(x) { return Math.round((x - xMin) / (xMax - xMin) * (W - 1)); }
-      function py(y) { return H - 1 - Math.round((y - yMin) / (yMax - yMin) * (H - 1)); }
+      function px(x) { return pad.left + (x - xMin) / (xMax - xMin) * pw; }
+      function py(y) { return pad.top + ph * (1 - (y - yMin) / (yMax - yMin)); }
       for (var k = 0; k < pts.length; k += 3) {
-        var xx = px(pts[k]), yy = py(pts[k + 1]);
-        if (xx < 0 || xx >= W || yy < 0 || yy >= H) continue;
+        var xx = Math.round(px(pts[k])), yy = Math.round(py(pts[k + 1]));
+        if (xx < pad.left || xx >= W - pad.right || yy < pad.top || yy >= H - pad.bottom) continue;
         var c = heatColor(pts[k + 2] / gmax);
         var lum = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
         for (var dy = 0; dy <= 1; dy++) {
           for (var dx = 0; dx <= 1; dx++) {
             var x2 = xx + dx, y2 = yy + dy;
-            if (x2 >= W || y2 >= H) continue;
+            if (x2 >= W - pad.right || y2 >= H - pad.bottom) continue;
             var idx = (y2 * W + x2) * 4;
             var cur = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
             if (lum > cur) { data[idx] = c[0]; data[idx + 1] = c[1]; data[idx + 2] = c[2]; }
@@ -910,14 +930,36 @@ profile times the angular distribution.
         traceLine(function () { return s23hi; }, function (fr) { return -1 + 2 * fr; }, 120);
       }
 
-      // axis labels
-      ctx.font = '12px ui-monospace, monospace';
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      // axis ticks + labels
+      ctx.font = '11px ui-monospace, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      ctx.lineWidth = 1;
+      // x ticks
+      var xt = niceTicks(xMin, xMax, 5);
       ctx.textAlign = 'center';
-      ctx.fillText(VAR_LABEL[xVar] + '  [' + xMin.toFixed(2) + ' – ' + xMax.toFixed(2) + ']', W / 2, H - 6);
+      for (var ti = 0; ti < xt.length; ti++) {
+        var xpx = Math.round(px(xt[ti]));
+        ctx.beginPath(); ctx.moveTo(xpx, H - pad.bottom); ctx.lineTo(xpx, H - pad.bottom + 4); ctx.stroke();
+        ctx.fillText(fmtTick(xt[ti]), xpx, H - pad.bottom + 14);
+      }
+      // y ticks
+      var yt = niceTicks(yMin, yMax, 5);
+      ctx.textAlign = 'right';
+      for (var ti = 0; ti < yt.length; ti++) {
+        var ypx = Math.round(py(yt[ti]));
+        ctx.beginPath(); ctx.moveTo(pad.left - 4, ypx); ctx.lineTo(pad.left, ypx); ctx.stroke();
+        ctx.fillText(fmtTick(yt[ti]), pad.left - 7, ypx + 4);
+      }
+      // axis names
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = '12px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(VAR_LABEL[xVar] + '  [' + xMin.toFixed(2) + ' – ' + xMax.toFixed(2) + ']', W / 2, H - 4);
       ctx.save();
-      ctx.translate(10, H / 2);
+      ctx.translate(12, pad.top + ph / 2);
       ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
       ctx.fillText(VAR_LABEL[yVar] + '  [' + yMin.toFixed(2) + ' – ' + yMax.toFixed(2) + ']', 0, 0);
       ctx.restore();
     }
@@ -928,7 +970,7 @@ profile times the angular distribution.
       ctx.clearRect(0, 0, W, H);
       ctx.fillStyle = '#1e1e2e';
       ctx.fillRect(0, 0, W, H);
-      var pad = { top: 10, right: 12, bottom: 22, left: 36 };
+      var pad = { top: 8, right: 8, bottom: 32, left: 46 };
       var pw = W - pad.left - pad.right, ph = H - pad.top - pad.bottom;
       ctx.strokeStyle = 'rgba(255,255,255,0.08)';
       ctx.lineWidth = 1;
@@ -943,22 +985,47 @@ profile times the angular distribution.
       var vmax = 0;
       for (var i = 0; i < values.length; i++) if (values[i] > vmax) vmax = values[i];
       if (vmax <= 0) vmax = 1;
+      // x range from the actual x values (index-based fallback)
+      var x0 = xValues ? xValues[0] : 0;
+      var x1 = xValues ? xValues[xValues.length - 1] : (values.length - 1);
+      function xpos(v) { return pad.left + (v - x0) / (x1 - x0) * pw; }
+      // ticks
+      ctx.font = '10px ui-monospace, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+      var xt = niceTicks(x0, x1, 5);
+      ctx.textAlign = 'center';
+      for (var ti = 0; ti < xt.length; ti++) {
+        var xpx = Math.round(xpos(xt[ti]));
+        ctx.beginPath(); ctx.moveTo(xpx, pad.top + ph); ctx.lineTo(xpx, pad.top + ph + 4); ctx.stroke();
+        ctx.fillText(fmtTick(xt[ti]), xpx, H - pad.bottom + 14);
+      }
+      var yt = niceTicks(0, vmax, 5);
+      ctx.textAlign = 'right';
+      for (var ti = 0; ti < yt.length; ti++) {
+        var ypx = Math.round(pad.top + ph * (1 - yt[ti] / vmax));
+        ctx.beginPath(); ctx.moveTo(pad.left - 4, ypx); ctx.lineTo(pad.left, ypx); ctx.stroke();
+        ctx.fillText(fmtTick(yt[ti]), pad.left - 7, ypx + 4);
+      }
+      // curve
       ctx.strokeStyle = '#fbbf24';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       for (var i = 0; i < values.length; i++) {
-        var x = pad.left + pw * i / (values.length - 1);
+        var x = xValues ? xpos(xValues[i]) : (pad.left + pw * i / (values.length - 1));
         var y = pad.top + ph * (1 - values[i] / vmax);
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
+      // axis names
       ctx.fillStyle = 'rgba(255,255,255,0.85)';
       ctx.font = '11px ui-monospace, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(xLabel, pad.left + pw / 2, H - 6);
+      ctx.fillText(xLabel, pad.left + pw / 2, H - 4);
       ctx.save();
       ctx.translate(8, pad.top + ph / 2);
       ctx.rotate(-Math.PI / 2);
+      ctx.textAlign = 'center';
       ctx.fillText(yLabel, 0, 0);
       ctx.restore();
     }
@@ -966,9 +1033,10 @@ profile times the angular distribution.
     function plotMass(canvas, sess) {
       var cfg = sess.config;
       var N = 160;
-      var vals = [];
+      var vals = [], ms = [];
       for (var i = 0; i < N; i++) {
         var m = sess.mMin + (sess.mMax - sess.mMin) * i / (N - 1);
+        ms.push(m);
         var s23 = m * m;
         var r = dalitzS12Range(cfg.mP, cfg.mA, cfg.mB, cfg.mC, s23);
         if (!r) { vals.push(0); continue; }
@@ -986,17 +1054,18 @@ profile times the angular distribution.
         vals.push(sum * (r[1] - r[0]) / K * (2 * m));
       }
       linePlot(canvas, vals,
-        'm₂₃  [' + sess.mMin.toFixed(3) + '–' + sess.mMax.toFixed(3) + ' GeV]', 'dN/dm₂₃');
+        'm₂₃  [' + sess.mMin.toFixed(3) + '–' + sess.mMax.toFixed(3) + ' GeV]', 'dN/dm₂₃', ms);
     }
 
     function plotAngular(canvas, sess) {
       var N = 200;
-      var vals = [];
+      var vals = [], xs = [];
       for (var i = 0; i < N; i++) {
         var cosT = -1 + 2 * i / (N - 1);
+        xs.push(cosT);
         vals.push(sess.angular(cosT));
       }
-      linePlot(canvas, vals, 'cos θ_R', 'W');
+      linePlot(canvas, vals, 'cos θ_R', 'W', xs);
     }
 
     function plotAll(sess) {
